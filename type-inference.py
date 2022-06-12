@@ -214,7 +214,6 @@ def analyse(node, env, non_generic=None):
         new_non_generic = non_generic.copy()
         new_non_generic.add(arg_type)
         result_type = analyse(node.body, new_env, new_non_generic)
-        print("result_type: {}".format(result_type))
         return Function(arg_type, result_type)
     elif isinstance(node, Let):
         defn_type = analyse(node.defn, env, non_generic)
@@ -228,7 +227,6 @@ def analyse(node, env, non_generic=None):
         new_non_generic = non_generic.copy()
         new_non_generic.add(new_type)
         defn_type = analyse(node.defn, new_env, new_non_generic)
-        print("defn_type: {}".format(defn_type))
         unify(new_type, defn_type)
         return analyse(node.body, new_env, non_generic)
     assert 0, "Unhandled syntax node {0}".format(type(node))
@@ -430,6 +428,7 @@ def try_exp(env, node):
         print(e)
  
  
+import time
 def main():
     """The main example program.
  
@@ -524,7 +523,16 @@ def main():
  
     #for example in examples:
     #    try_exp(my_env, example)
-    try_exp(my_env, examples[0])
+    #try_exp(my_env, examples[0])
+
+    total = 0.0
+    iterations = 1000000
+    for i in range(0, iterations):
+        start = time.time()
+        t = analyse(examples[0], my_env)
+        end = time.time()
+        total += end - start
+    print("Iterations: {} Total time: {} ns".format(iterations, total * 1000000))
  
  
 if __name__ == '__main__':

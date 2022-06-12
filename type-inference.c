@@ -1,7 +1,6 @@
 #include <assert.h>
 #include <errno.h>
 #include <stddef.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
@@ -70,9 +69,9 @@ struct lang_type {
   };
   enum lang_type_type type;
 };
-struct _lt_item {
+struct lt_list {
   struct lang_type* val;
-  struct _lt_item* next;
+  struct lt_list* next;
 };
 void print_type(struct lang_type* t);
 
@@ -160,13 +159,13 @@ int occurs_in_type(struct lang_type* v, struct lang_type* type2)
   return 0;
 }
 
-int is_generic(struct lang_type* v, struct _lt_item* non_generic)
+int is_generic(struct lang_type* v, struct lt_list* ngs)
 {
-  /* Flip the return value because we're checking non_generics for a generic */
-  while (non_generic != NULL) {
-    if (occurs_in_type(v, non_generic->val))
+  /* Flip the return value because we're checking ngss for a generic */
+  while (ngs != NULL) {
+    if (occurs_in_type(v, ngs->val))
       return 0;
-    non_generic = non_generic->next;
+    ngs = ngs->next;
   }
   return 1;
 }
@@ -177,12 +176,14 @@ struct _mp_item {
   struct _mp_item* next;
 };
 
-struct lang_type* freshrec(struct lang_type* tp, struct _lt_item* non_generic, struct _mp_item* map)
+struct lang_type* freshrec(
+  struct lang_type* tp, struct lt_list* ngs, struct _mp_item* map
+)
 {
   struct lang_type* p = prune(tp);
   switch (p->type) {
   case VARIABLE: {
-    if (!is_generic(p, non_generic))
+    if (!is_generic(p, ngs))
       return p;
     struct _mp_item *cur = map, *prev = cur;
     while (cur->from != NULL) {
@@ -203,7 +204,7 @@ struct lang_type* freshrec(struct lang_type* tp, struct _lt_item* non_generic, s
       .type = OPERATOR, .op_name = p->op_name, .args = p->args
     };
     for (int i = 0; i < ret->args; ++i) {
-      ret->types[i] = freshrec(p->types[i], non_generic, map);
+      ret->types[i] = freshrec(p->types[i], ngs, map);
     }
     return ret;
   }
@@ -215,7 +216,7 @@ struct lang_type* freshrec(struct lang_type* tp, struct _lt_item* non_generic, s
   }
 };
 
-struct lang_type* fresh(struct lang_type* t, struct _lt_item* non_generic)
+struct lang_type* fresh(struct lang_type* t, struct lt_list* ngs)
 {
   struct _mp_item map[MAX_MP_ITEM];
   for (int i = 0; i < MAX_MP_ITEM - 1; ++i) {
@@ -225,21 +226,23 @@ struct lang_type* fresh(struct lang_type* t, struct _lt_item* non_generic)
     map[i].from = map[i].to = NULL;
   }
   map[MAX_MP_ITEM - 1].next = NULL;
-  return freshrec(t, non_generic, map);
+  return freshrec(t, ngs, map);
 }
 
-struct lang_type* get_type(char* name, struct env* env, struct _lt_item* non_generic)
+struct lang_type* get_type(char* name, struct env* env, struct lt_list* ngs)
 {
   long l = strtol(name, NULL, 0);
   struct lang_type* res = make_type(NULL);
-  *res = (struct lang_type) { .type = UNDEFINED_SYMBOL, .undefined_symbol = name };
+  *res = (struct lang_type) {
+    .type = UNDEFINED_SYMBOL, .undefined_symbol = name
+  };
   if (l != 0 || l == 0 && errno != EINVAL) {
     return Integer;
   }
   struct env* cur = env;
   while (cur != NULL) {
     if (!strcmp(name, cur->name))
-      return fresh(cur->node, non_generic);
+      return fresh(cur->node, ngs);
     cur = cur->next;
   }
   return res;
@@ -285,59 +288,49 @@ struct lang_type* unify(struct lang_type* t1, struct lang_type* t2)
   }
 }
 
-struct lang_type* analyze(struct ast_node* node, struct env* env, struct _lt_item* non_generic)
+struct lang_type* analyze(
+    struct ast_node* node, struct env* env, struct lt_list* ngs
+)
 {
   switch(node->type) {
   case IDENTIFIER:
-    return get_type(node->name, env, non_generic);
+    return get_type(node->name, env, ngs);
   case APPLY: {
-    struct lang_type* fun_type = analyze(node->fn, env, non_generic);
-    struct lang_type* arg_type = analyze(node->arg, env, non_generic);
-    struct lang_type* result_type = Var();
+    struct lang_type* fun_type = analyze(node->fn, env, ngs);
     if (fun_type->type < 0)
       return fun_type;
+    struct lang_type* arg_type = analyze(node->arg, env, ngs);
     if (arg_type->type < 0)
       return arg_type;
+    struct lang_type* result_type = Var();
     (void) unify(Function(arg_type, result_type), fun_type);
     return result_type;
   }
   case LAMBDA: {
     struct lang_type* arg_type = Var();
-    struct env new_env = {
-      .name = node->v,
-      .node = arg_type,
-      .next = env,
-    };
-    struct _lt_item new_non_generic = { .val = arg_type, .next = non_generic };
-    struct lang_type* result_type = analyze(node->body, &new_env, &new_non_generic);
+    struct env new_env = { .name = node->v, .node = arg_type, .next = env };
+    struct lt_list new_ng = { .val = arg_type, .next = ngs };
+    struct lang_type* result_type = analyze(node->body, &new_env, &new_ng);
     if (result_type->type < 0)
       return result_type;
     return Function(arg_type, result_type);
   }
   case LET: {
-    struct lang_type* defn_type = analyze(node->defn, env, non_generic);
+    struct lang_type* defn_type = analyze(node->defn, env, ngs);
     if (defn_type->type < 0)
       return defn_type;
-    struct env new_env = {
-      .name = node->v,
-      .node = defn_type,
-      .next = env,
-    };
-    return analyze(node->body, &new_env, non_generic);
+    struct env new_env = { .name = node->v, .node = defn_type, .next = env };
+    return analyze(node->body, &new_env, ngs);
   }
   case LETREC: {
     struct lang_type* new_type = Var();
-    struct env new_env = {
-      .name = node->v,
-      .node = new_type,
-      .next = env,
-    };
-    struct _lt_item new_non_generic = { .val = new_type, .next = non_generic };
-    struct lang_type* defn_type = analyze(node->defn, &new_env, &new_non_generic);
+    struct env new_env = { .name = node->v, .node = new_type, .next = env };
+    struct lt_list new_ng = { .val = new_type, .next = ngs };
+    struct lang_type* defn_type = analyze(node->defn, &new_env, &new_ng);
     if (defn_type->type < 0)
       return defn_type;
     (void) unify(new_type, defn_type);
-    return analyze(node->body, &new_env, non_generic);
+    return analyze(node->body, &new_env, ngs);
   }
   default: {
     struct lang_type* res = make_type(NULL);
@@ -346,6 +339,10 @@ struct lang_type* analyze(struct ast_node* node, struct env* env, struct _lt_ite
   }
   }
 }
+
+/* Usage examples */
+#include <stdio.h>
+#include <time.h>
 
 void print(struct ast_node* n, struct lang_type* t);
 
@@ -440,9 +437,19 @@ int main(void)
     }
   };
 
-  struct lang_type* t = analyze(&factorial, my_env, NULL);
-
+  struct lang_type* t;
+  clock_t total = 0;
+#define ITERATIONS 1000000
+  for (int i = 0; i < ITERATIONS; ++i) {
+    ctx.current_type = 16; /* Experimentally determined */
+    clock_t tic = clock();
+    t = analyze(&factorial, my_env, NULL);
+    clock_t toc = clock();
+    total += toc - tic;
+  }
   print(&factorial, t);
+  fprintf(stdout, "Iterations: %d Total time: %f ns\n",
+      ITERATIONS, (double) (total / CLOCKS_PER_SEC * 1000000));
   return 0;
 }
 
