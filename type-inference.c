@@ -63,15 +63,16 @@ struct lang_type {
     };
     struct {
       char* op_name;
+      struct lang_type* types[MAX_ARGS];
       int args;
-      struct _lt_item {
-        struct lang_type *val;
-        struct _lt_item* next;
-      } types[MAX_ARGS];
     };
     char* undefined_symbol;
   };
   enum lang_type_type type;
+};
+struct _lt_item {
+  struct lang_type* val;
+  struct _lt_item* next;
 };
 void print_type(struct lang_type* t);
 
@@ -118,10 +119,7 @@ struct lang_type* Function(struct lang_type* arg_t, struct lang_type* res_t)
     .type = OPERATOR,
     .op_name = fname,
     .args = 2,
-    .types = { 
-      { .val = arg_t, .next = &function->types[1] },
-      { .val = res_t, .next = NULL }
-    }
+    .types = { arg_t, res_t },
   };
   return function;
 }
@@ -155,12 +153,9 @@ int occurs_in_type(struct lang_type* v, struct lang_type* type2)
   if (pruned_type2 == v)
     return 1;
   if (pruned_type2->type == OPERATOR) {
-    struct _lt_item* cmp = pruned_type2->types;
-    while (cmp != NULL && cmp->val != NULL) {
-      if (occurs_in_type(v, cmp->val))
+    for (int i = 0; i < pruned_type2->args; ++i)
+      if (occurs_in_type(v, pruned_type2->types[i]))
         return 1;
-      cmp = cmp->next;
-    }
   }
   return 0;
 }
@@ -207,12 +202,8 @@ struct lang_type* freshrec(struct lang_type* tp, struct _lt_item* non_generic, s
     *ret = (struct lang_type) {
       .type = OPERATOR, .op_name = p->op_name, .args = p->args
     };
-    for (int i = 0; i < MAX_ARGS - 1; ++i) {
-      ret->types[i].next = &ret->types[i+1];
-    }
-    ret->types[MAX_ARGS - 1].next = NULL;
     for (int i = 0; i < ret->args; ++i) {
-      ret->types[i].val = freshrec(p->types[i].val, non_generic, map);
+      ret->types[i] = freshrec(p->types[i], non_generic, map);
     }
     return ret;
   }
@@ -279,13 +270,8 @@ struct lang_type* unify(struct lang_type* t1, struct lang_type* t2)
         *ret = (struct lang_type) { .type = TYPE_MISMATCH };
         return ret;
       }
-      struct _lt_item *at = a->types;
-      struct _lt_item *bt = b->types;
-      while (at != NULL && at->val != NULL && bt != NULL && bt->val != NULL) {
-        (void)unify(at->val, bt->val);
-        at = at->next;
-        bt = bt->next;
-      }
+      for (int i = 0; i < a->args; ++i)
+        (void)unify(a->types[i], b->types[i]);
       return a;
     }
   default:
@@ -380,10 +366,7 @@ int main(void)
     .type = OPERATOR,
     .op_name = "*",
     .args = 2,
-    .types = { 
-      { .val = var1, .next = &pair_type->types[1] },
-      { .val = var2, .next = NULL }
-    }
+    .types = { var1, var2 }
   };
   struct lang_type* var3 = Var();
 
@@ -485,8 +468,8 @@ char* print_a_type(struct lang_type* t)
     if (t->args == 0)
       asprintf(&ret, "%s", t->op_name); /* Ensure caller can free as expected */
     else if (t->args == 2) {
-      char* type0 = print_a_type(t->types[0].val);
-      char* type1 = print_a_type(t->types[1].val);
+      char* type0 = print_a_type(t->types[0]);
+      char* type1 = print_a_type(t->types[1]);
       asprintf(
         &ret, "(%s %s %s)",
         type0 ? type0 : "NULL",
