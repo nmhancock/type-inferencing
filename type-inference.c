@@ -5,75 +5,11 @@
 #include <string.h>
 #include <limits.h>
 
-#define MAX_ARGS 2
-#define MAX_VARS 10
+#include "type-inference.h"
 
+#define MAX_VARS 10
 #define MAX_TYPES 200
 #define MAX_MP_ITEM 20 /* Used in fresh & freshrec */
-
-enum ast_node_type {
-  IDENTIFIER = 0,
-  APPLY = 1,
-  LAMBDA = 2,
-  LET = 3,
-  LETREC = 4
-};
-
-struct ast_node {
-  union {
-    struct {
-      char* name;
-    };
-    struct {
-      struct ast_node* fn;
-      struct ast_node* arg;
-    };
-    struct {
-      char* v;
-      struct ast_node* defn;
-      struct ast_node* body;
-    };
-  };
-  enum ast_node_type type;
-};
-void print_ast(struct ast_node* n);
-
-enum lang_type_type {
-  VARIABLE = 0,
-  FUNCTION = 1,
-  OPERATOR = 2,
-  UNHANDLED_SYNTAX_NODE = -1,
-  UNDEFINED_SYMBOL = -2,
-  RECURSIVE_UNIFICATION = -3,
-  TYPE_MISMATCH = -4,
-  UNIFY_ERROR = -5,
-};
-
-struct lang_type {
-  union {
-    struct {
-      struct lang_type* instance;
-      char* var_name;
-      int id;
-    };
-    struct {
-      struct lang_type* from_type;
-      struct lang_type* to_type;
-    };
-    struct {
-      char* op_name;
-      struct lang_type* types[MAX_ARGS];
-      int args;
-    };
-    char* undefined_symbol;
-  };
-  enum lang_type_type type;
-};
-struct lt_list {
-  struct lang_type* val;
-  struct lt_list* next;
-};
-void print_type(struct lang_type* t);
 
 /* Global context to keep function signatures the same */
 struct lang_type types[MAX_TYPES];
@@ -82,29 +18,24 @@ struct lang_type* Bool = &types[1];
 struct inferencing_ctx { struct lang_type* types; int current_type; };
 struct inferencing_ctx ctx = { .types = &types, .current_type = 2 };
 
-struct env {
-  char* name;
-  struct lang_type* node;
-  struct env* next;
-};
+/* Debugging functions */
+static void print_ast(struct ast_node* n);
+static void print_type(struct lang_type* t);
 
-struct lang_type* make_type(int* idx)
+struct lang_type* make_type(void)
 {
   assert(ctx.current_type < MAX_TYPES);
-  if (idx)
-    *idx = ctx.current_type;
+  ctx.types[ctx.current_type].id = ctx.current_type;
   return &ctx.types[ctx.current_type++];
 }
 
 struct lang_type* Var()
 {
-  int id;
-  struct lang_type* result_type = make_type(&id);
+  struct lang_type* result_type = make_type();
   *result_type = (struct lang_type) {
     .type = VARIABLE,
     .instance = NULL,
     .var_name = NULL,
-    .id = id
   };
   return result_type;
 }
@@ -112,7 +43,7 @@ struct lang_type* Var()
 static char* fname = "->";
 struct lang_type* Function(struct lang_type* arg_t, struct lang_type* res_t)
 {
-  struct lang_type* function = make_type(NULL);
+  struct lang_type* function = make_type();
   /* Unrolling the constructor to keep the same form as the old code. */
   *function = (struct lang_type) {
     .type = OPERATOR,
@@ -123,27 +54,21 @@ struct lang_type* Function(struct lang_type* arg_t, struct lang_type* res_t)
   return function;
 }
 
+struct lang_type* Err(enum lang_type_type err, char* symbol)
+{
+  struct lang_type* error = make_type();
+  *error = (struct lang_type) { .type = err, .undefined_symbol = symbol };
+  return error;
+}
+
 struct lang_type* prune(struct lang_type* t)
 {
-  /*
-   * Returns the currently defining instance of t.
-   
-   * As a side effect, collapses the list of type instances. The function Prune
-   * is used whenever a type expression has to be inspected: it will always
-   * return a type expression which is either an uninstantiated type variable or
-   * a type operator; i.e. it will skip instantiated variables, and will
-   * actually prune them from expressions to remove long chains of instantiated
-   * variables.
-  */
-  switch (t->type) {
-  case VARIABLE:
-    if (t->instance == NULL)
-      return t;
-    t->instance = prune(t->instance);
-    return t->instance;
-  default:
+  if (t->type != VARIABLE)
     return t;
-  }
+  if (t->instance == NULL)
+    return t;
+  t->instance = prune(t->instance);
+  return t->instance;
 }
 
 int occurs_in_type(struct lang_type* v, struct lang_type* type2)
@@ -151,14 +76,17 @@ int occurs_in_type(struct lang_type* v, struct lang_type* type2)
   struct lang_type* pruned_type2 = prune(type2);
   if (pruned_type2 == v)
     return 1;
-  if (pruned_type2->type == OPERATOR) {
+  if (pruned_type2->type == OPERATOR)
     for (int i = 0; i < pruned_type2->args; ++i)
       if (occurs_in_type(v, pruned_type2->types[i]))
         return 1;
-  }
   return 0;
 }
 
+struct lt_list {
+  struct lang_type* val;
+  struct lt_list* next;
+};
 int is_generic(struct lang_type* v, struct lt_list* ngs)
 {
   /* Flip the return value because we're checking ngss for a generic */
@@ -185,21 +113,21 @@ struct lang_type* freshrec(
   case VARIABLE: {
     if (!is_generic(p, ngs))
       return p;
-    struct _mp_item *cur = map, *prev = cur;
-    while (cur->from != NULL) {
-      assert(cur != NULL); /* FIXME, prealloc */
+    struct _mp_item *cur = map;
+    while (cur != NULL && cur->from != NULL) {
       if (cur->from == p) {
         return cur->to;
       }
-      prev = cur;
       cur = cur->next;
     }
+    if (cur == NULL)
+      return Err(LOCAL_SCOPE_EXCEEDED, NULL);
     cur->from = p;
     cur->to = Var();
     return cur->to;
   }
   case OPERATOR: {
-    struct lang_type* ret = make_type(NULL);
+    struct lang_type* ret = make_type();
     *ret = (struct lang_type) {
       .type = OPERATOR, .op_name = p->op_name, .args = p->args
     };
@@ -208,11 +136,8 @@ struct lang_type* freshrec(
     }
     return ret;
   }
-  default: {
-    struct lang_type* ret = make_type(NULL);
-    *ret = (struct lang_type) { .type = UNIFY_ERROR };
-    return ret;
-  }
+  default:
+    return Err(UNIFY_ERROR, NULL);
   }
 };
 
@@ -222,20 +147,21 @@ struct lang_type* fresh(struct lang_type* t, struct lt_list* ngs)
   for (int i = 0; i < MAX_MP_ITEM - 1; ++i) {
     map[i].next = &map[i+1];
   }
+  map[MAX_MP_ITEM - 1].next = NULL;
   for (int i = 0; i < MAX_MP_ITEM; ++i) {
     map[i].from = map[i].to = NULL;
   }
-  map[MAX_MP_ITEM - 1].next = NULL;
   return freshrec(t, ngs, map);
 }
 
+struct env {
+  char* name;
+  struct lang_type* node;
+  struct env* next;
+};
 struct lang_type* get_type(char* name, struct env* env, struct lt_list* ngs)
 {
   long l = strtol(name, NULL, 0);
-  struct lang_type* res = make_type(NULL);
-  *res = (struct lang_type) {
-    .type = UNDEFINED_SYMBOL, .undefined_symbol = name
-  };
   if (l != 0 || l == 0 && errno != EINVAL) {
     return Integer;
   }
@@ -245,7 +171,7 @@ struct lang_type* get_type(char* name, struct env* env, struct lt_list* ngs)
       return fresh(cur->node, ngs);
     cur = cur->next;
   }
-  return res;
+  return Err(UNDEFINED_SYMBOL, name);
 }
 
 struct lang_type* unify(struct lang_type* t1, struct lang_type* t2)
@@ -257,22 +183,16 @@ struct lang_type* unify(struct lang_type* t1, struct lang_type* t2)
   case VARIABLE:
     if (a == b)
       return a; /* Arbitrary, they're already equal! */
-    if (occurs_in_type(a, b)) {
-      struct lang_type* ret = make_type(NULL);
-      *ret = (struct lang_type) { .type = RECURSIVE_UNIFICATION };
-      return ret;
-    }
+    if (occurs_in_type(a, b))
+      return Err(RECURSIVE_UNIFICATION, NULL);
     a->instance = b;
     return a;
   case OPERATOR:
     if (b->type == VARIABLE)
       return unify(b, a);
     if (b->type == OPERATOR) {
-      if (strcmp(a->op_name, b->op_name) || a->args != b->args) {
-        struct lang_type* ret = make_type(NULL);
-        *ret = (struct lang_type) { .type = TYPE_MISMATCH };
-        return ret;
-      }
+      if (strcmp(a->op_name, b->op_name) || a->args != b->args)
+        Err(TYPE_MISMATCH, NULL);
       for (int i = 0; i < a->args; ++i)
         (void)unify(a->types[i], b->types[i]);
       return a;
@@ -282,9 +202,7 @@ struct lang_type* unify(struct lang_type* t1, struct lang_type* t2)
       return a;
     if (b->type < 0)
       return b;
-    struct lang_type* ret = make_type(NULL);
-    *ret = (struct lang_type) { .type = UNIFY_ERROR };
-    return ret;
+    return Err(UNIFY_ERROR, NULL);
   }
 }
 
@@ -332,11 +250,8 @@ struct lang_type* analyze(
     (void) unify(new_type, defn_type);
     return analyze(node->body, &new_env, ngs);
   }
-  default: {
-    struct lang_type* res = make_type(NULL);
-    *res = (struct lang_type) { .type = UNHANDLED_SYNTAX_NODE };
-    return res;
-  }
+  default:
+    return Err(UNHANDLED_SYNTAX_NODE, NULL);
   }
 }
 
@@ -358,7 +273,7 @@ int main(void)
 
   struct lang_type* var1 = Var();
   struct lang_type* var2 = Var();
-  struct lang_type* pair_type = make_type(NULL);
+  struct lang_type* pair_type = make_type();
   *pair_type = (struct lang_type) {
     .type = OPERATOR,
     .op_name = "*",
