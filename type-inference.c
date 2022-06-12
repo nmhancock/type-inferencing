@@ -73,7 +73,7 @@ struct lang_type {
   };
   enum lang_type_type type;
 };
-void print_type(struct lang_type*, int);
+void print_type(struct lang_type* t);
 
 /* Global context to keep function signatures the same */
 struct lang_type types[MAX_TYPES];
@@ -361,6 +361,8 @@ struct lang_type* analyze(struct ast_node* node, struct env* env, struct _lt_ite
   }
 }
 
+void print(struct ast_node* n, struct lang_type* t);
+
 int main(void)
 {
   /* Basic types are constructed with a nullary type constructor */
@@ -383,7 +385,6 @@ int main(void)
       { .val = var2, .next = NULL }
     }
   };
-
   struct lang_type* var3 = Var();
 
   struct env envs[7] = {
@@ -408,24 +409,6 @@ int main(void)
     { .name = "factorial", .node = Function(Integer, Integer), .next = NULL }
   };
   struct env* my_env = &envs;
-
-  struct ast_node ast = {
-    .type = APPLY,
-    .fn = &(struct ast_node) {
-      .type = APPLY,
-      .fn = &(struct ast_node) { .type = IDENTIFIER, .name = "pair" },
-      .arg = &(struct ast_node) {
-        .type = APPLY,
-        .fn = &(struct ast_node) { .type = IDENTIFIER, .name = "f" },
-        .arg = &(struct ast_node) { .type = IDENTIFIER, .name = "4" },
-      }
-    },
-    .arg = &(struct ast_node) {
-      .type = APPLY,
-      .fn = &(struct ast_node) { .type = IDENTIFIER, .name = "f" },
-      .arg = &(struct ast_node) { .type = IDENTIFIER, .name = "true" }
-    }
-  };
 
   struct ast_node factorial = {
     .type = LETREC,
@@ -474,77 +457,86 @@ int main(void)
     }
   };
 
-  struct ast_node fac_test = {
-      .type = APPLY,
-      .fn = &(struct ast_node) { .type = IDENTIFIER, .name = "factorial" },
-      .arg = &(struct ast_node) { .type = IDENTIFIER, .name = "5" },
-  };
+  struct lang_type* t = analyze(&factorial, my_env, NULL);
 
-  struct lang_type* t = analyze(
-    &factorial,
-    my_env,
-    NULL
-  );
-
-  print_ast(&fac_test);
-  print_type(t, 0);
+  print(&factorial, t);
   return 0;
 }
 
-void print_type(struct lang_type* t, int indent)
+char* print_a_type(struct lang_type* t)
 {
-  if (t == NULL) {
-    printf("%*s%s NULL\n", indent, "", "NULL");
-    return;
+  char* ret;
+  if (!t) {
+    asprintf(&ret, "%s\n", "NULL");
+    return ret;
   }
   switch(t->type) {
   case VARIABLE:
-    if (t->instance != NULL)
-      print_type(t->instance, indent);
-    else
-      printf("%*s%s (%d)\n", indent, "", t->var_name, t->id);
-    return;
+    if (!t->instance) {
+      asprintf(&ret, "%s (%d)", t->var_name, t->id);
+      return ret;
+    }
+    char* instance = print_a_type(t->instance);
+    if (instance)
+      return instance;
+    asprintf(&ret, "NULL");
+    return ret;
   case OPERATOR:
     if (t->args == 0)
-      printf("%*s%s\n", indent, "", t->op_name);
+      asprintf(&ret, "%s", t->op_name); /* Ensure caller can free as expected */
     else if (t->args == 2) {
-      printf("%*s%s\n", indent, "", t->op_name);
-      print_type(t->types[0].val, indent + 2);
-      print_type(t->types[1].val, indent + 2);
-    } else {
-      printf("%*s%s\n", indent, "", t->op_name);
-      for (int i = 0; i < t->args; ++i) {
-        print_type(t->types[i].val, indent + 2);
-      }
+      char* type0 = print_a_type(t->types[0].val);
+      char* type1 = print_a_type(t->types[1].val);
+      asprintf(
+        &ret, "(%s %s %s)",
+        type0 ? type0 : "NULL",
+        t->op_name,
+        type1 ? type1 : "NULL"
+      );
+      free(type0);
+      free(type1);
+    } else { /* TODO: Implement properly, don't be lazy! */
+      asprintf(&ret, "%s", t->op_name); /* Ensure caller can free as expected */
     }
-    return;
+    return ret;
   case UNHANDLED_SYNTAX_NODE:
-    printf("Unhandled syntax node\n");
-    return;
+    asprintf(&ret, "Unhandled syntax node");
+    return ret;
   case UNDEFINED_SYMBOL:
-    printf("Undefined symbol %s\n", t->undefined_symbol);
-    return;
+    asprintf(&ret, "Undefined symbol %s\n", t->undefined_symbol);
+    return ret;
   case RECURSIVE_UNIFICATION:
-    printf("Recursive unification\n");
-    return;
+    asprintf(&ret, "Recursive unification");
+    return ret;
   case TYPE_MISMATCH:
-    printf("Type mismatch\n");
-    return;
+    asprintf(&ret, "Type mismatch");
+    return ret;
   case UNIFY_ERROR:
-    printf("Unification error\n");
-    return;
+    asprintf(&ret, "Unification error");
+    return ret;
   default:
-    printf("Type: %d\n", t->type);
-    printf("Check: %d\n", t->type == UNDEFINED_SYMBOL);
-    return;
+    asprintf(&ret, "Unexpected Type: %d", t->type);
+    return ret;
   }
+}
+
+void print_type(struct lang_type* t)
+{
+  char* res = print_a_type(t);
+  if (!res)
+    printf("NULL\n");
+  else
+    printf("%s\n", res);
+  free(res);
 }
 
 char* print_ast_node(struct ast_node* n)
 {
   char* ret;
-  if (!n)
+  if (!n) {
     asprintf(&ret, "%s\n", "NULL");
+    return ret;
+  }
   switch(n->type) {
   case IDENTIFIER: {
     asprintf(&ret, "%s", n->name ? n->name : "NULL");
@@ -567,7 +559,12 @@ char* print_ast_node(struct ast_node* n)
   case LET: {
     char* body = print_ast_node(n->body);
     char* defn = print_ast_node(n->defn);
-    asprintf(&ret, "(let %s = %s in %s)", n->v, defn ? defn : "NULL", body ? body : "NULL");
+    asprintf(
+      &ret,
+      "(let %s = %s in %s)",
+      n->v,
+      defn ? defn : "NULL",
+      body ? body : "NULL");
     free(defn);
     free(body);
     return ret;
@@ -575,7 +572,12 @@ char* print_ast_node(struct ast_node* n)
   case LETREC: {
     char* body = print_ast_node(n->body);
     char* defn = print_ast_node(n->defn);
-    asprintf(&ret, "(letrec %s = %s in %s)", n->v, defn ? defn : "NULL", body ? body : "NULL");
+    asprintf(
+      &ret,
+      "(letrec %s = %s in %s)",
+      n->v,
+      defn ? defn : "NULL",
+      body ? body : "NULL");
     free(defn);
     free(body);
     return ret;
@@ -587,6 +589,18 @@ char* print_ast_node(struct ast_node* n)
 void print_ast(struct ast_node* n)
 {
   char* res = print_ast_node(n);
-  printf("%s\n", res);
+  if (!res)
+    printf("NULL\n");
+  else
+    printf("%s\n", res);
   free(res);
+}
+
+void print(struct ast_node* n, struct lang_type* t)
+{
+  char* ast = print_ast_node(n);
+  char* type = print_a_type(t);
+  printf("%s : %s\n", ast, type);
+  free(type);
+  free(ast);
 }
