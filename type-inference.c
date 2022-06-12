@@ -7,9 +7,8 @@
 
 #include "type-inference.h"
 
-#define MAX_VARS 10
-#define MAX_TYPES 200
-#define MAX_MP_ITEM 20 /* Used in fresh & freshrec */
+#define MAX_VARS 20 /* Max vars in same context, used in fresh & freshrec */
+#define MAX_TYPES 200 /* Max total types, used in global below */
 
 /* Global context to keep function signatures the same */
 struct lang_type types[MAX_TYPES];
@@ -22,14 +21,14 @@ struct inferencing_ctx ctx = { .types = &types, .current_type = 2 };
 static void print_ast(struct ast_node* n);
 static void print_type(struct lang_type* t);
 
-struct lang_type* make_type(void)
+static struct lang_type* make_type(void)
 {
   assert(ctx.current_type < MAX_TYPES);
   ctx.types[ctx.current_type].id = ctx.current_type;
   return &ctx.types[ctx.current_type++];
 }
 
-struct lang_type* Var()
+static struct lang_type* Var()
 {
   struct lang_type* result_type = make_type();
   *result_type = (struct lang_type) {
@@ -41,7 +40,9 @@ struct lang_type* Var()
 }
 
 static char* fname = "->";
-struct lang_type* Function(struct lang_type* arg_t, struct lang_type* res_t)
+static struct lang_type* Function(
+  struct lang_type* arg_t, struct lang_type* res_t
+)
 {
   struct lang_type* function = make_type();
   /* Unrolling the constructor to keep the same form as the old code. */
@@ -54,14 +55,14 @@ struct lang_type* Function(struct lang_type* arg_t, struct lang_type* res_t)
   return function;
 }
 
-struct lang_type* Err(enum lang_type_type err, char* symbol)
+static struct lang_type* Err(enum lang_type_type err, char* symbol)
 {
   struct lang_type* error = make_type();
   *error = (struct lang_type) { .type = err, .undefined_symbol = symbol };
   return error;
 }
 
-struct lang_type* prune(struct lang_type* t)
+static struct lang_type* prune(struct lang_type* t)
 {
   if (t->type != VARIABLE)
     return t;
@@ -71,7 +72,7 @@ struct lang_type* prune(struct lang_type* t)
   return t->instance;
 }
 
-int occurs_in_type(struct lang_type* v, struct lang_type* type2)
+static int occurs_in_type(struct lang_type* v, struct lang_type* type2)
 {
   struct lang_type* pruned_type2 = prune(type2);
   if (pruned_type2 == v)
@@ -83,11 +84,7 @@ int occurs_in_type(struct lang_type* v, struct lang_type* type2)
   return 0;
 }
 
-struct lt_list {
-  struct lang_type* val;
-  struct lt_list* next;
-};
-int is_generic(struct lang_type* v, struct lt_list* ngs)
+static int is_generic(struct lang_type* v, struct lt_list* ngs)
 {
   /* Flip the return value because we're checking ngss for a generic */
   while (ngs != NULL) {
@@ -104,7 +101,7 @@ struct _mp_item {
   struct _mp_item* next;
 };
 
-struct lang_type* freshrec(
+static struct lang_type* freshrec(
   struct lang_type* tp, struct lt_list* ngs, struct _mp_item* map
 )
 {
@@ -141,25 +138,22 @@ struct lang_type* freshrec(
   }
 };
 
-struct lang_type* fresh(struct lang_type* t, struct lt_list* ngs)
+static struct lang_type* fresh(struct lang_type* t, struct lt_list* ngs)
 {
-  struct _mp_item map[MAX_MP_ITEM];
-  for (int i = 0; i < MAX_MP_ITEM - 1; ++i) {
+  struct _mp_item map[MAX_VARS];
+  for (int i = 0; i < MAX_VARS - 1; ++i) {
     map[i].next = &map[i+1];
   }
-  map[MAX_MP_ITEM - 1].next = NULL;
-  for (int i = 0; i < MAX_MP_ITEM; ++i) {
+  map[MAX_VARS - 1].next = NULL;
+  for (int i = 0; i < MAX_VARS; ++i) {
     map[i].from = map[i].to = NULL;
   }
   return freshrec(t, ngs, map);
 }
 
-struct env {
-  char* name;
-  struct lang_type* node;
-  struct env* next;
-};
-struct lang_type* get_type(char* name, struct env* env, struct lt_list* ngs)
+static struct lang_type* get_type(
+  char* name, struct env* env, struct lt_list* ngs
+)
 {
   long l = strtol(name, NULL, 0);
   if (l != 0 || l == 0 && errno != EINVAL) {
@@ -174,7 +168,7 @@ struct lang_type* get_type(char* name, struct env* env, struct lt_list* ngs)
   return Err(UNDEFINED_SYMBOL, name);
 }
 
-struct lang_type* unify(struct lang_type* t1, struct lang_type* t2)
+static struct lang_type* unify(struct lang_type* t1, struct lang_type* t2)
 {
   struct lang_type* a = prune(t1);
   struct lang_type* b = prune(t2);
@@ -258,115 +252,6 @@ struct lang_type* analyze(
 /* Usage examples */
 #include <stdio.h>
 #include <time.h>
-
-void print(struct ast_node* n, struct lang_type* t);
-
-int main(void)
-{
-  /* Basic types are constructed with a nullary type constructor */
-  *Integer = (struct lang_type) {
-    .type = OPERATOR, .op_name = "int", .types = NULL, .args = 0
-  };
-  *Bool = (struct lang_type) {
-    .type = OPERATOR, .op_name = "bool", .types = NULL, .args = 0
-  };
-
-  struct lang_type* var1 = Var();
-  struct lang_type* var2 = Var();
-  struct lang_type* pair_type = make_type();
-  *pair_type = (struct lang_type) {
-    .type = OPERATOR,
-    .op_name = "*",
-    .args = 2,
-    .types = { var1, var2 }
-  };
-  struct lang_type* var3 = Var();
-
-  struct env envs[7] = {
-    {
-      .name = "pair",
-      .node = Function(var1, Function(var2, pair_type)),
-      .next = &envs[1]
-    },
-    { .name = "true", .node = Bool, .next = &envs[2] },
-    {
-      .name = "cond",
-      .node = Function(Bool, Function(var3, Function(var3, var3))),
-      .next = &envs[3],
-    },
-    { .name = "zero", .node = Function(Integer, Bool), .next = &envs[4] },
-    { .name = "pred", .node = Function(Integer, Integer), .next = &envs[5] },
-    {
-      .name = "times",
-      .node = Function(Integer, Function(Integer, Integer)),
-      .next = &envs[6]
-    },
-    { .name = "factorial", .node = Function(Integer, Integer), .next = NULL }
-  };
-  struct env* my_env = &envs;
-
-  struct ast_node factorial = {
-    .type = LETREC,
-    .v = "factorial",
-    .defn = &(struct ast_node) {
-      .type = LAMBDA,
-      .v = "n",
-      .body = &(struct ast_node) {
-        .type = APPLY,
-        .fn = &(struct ast_node) {
-          .type = APPLY,
-          .fn = &(struct ast_node) {
-            .type = APPLY,
-            .fn = &(struct ast_node) { .type = IDENTIFIER, .name = "cond" },
-            .arg = &(struct ast_node) {
-              .type = APPLY,
-              .fn = &(struct ast_node) { .type = IDENTIFIER, .name = "zero" },
-              .arg = &(struct ast_node) { .type = IDENTIFIER, .name = "n" }
-            }
-          },
-          .arg = &(struct ast_node) { .type = IDENTIFIER, .name = "1" }
-        },
-        .arg = &(struct ast_node) {
-          .type = APPLY,
-          .fn = &(struct ast_node) {
-            .type = APPLY,
-            .fn = &(struct ast_node) { .type = IDENTIFIER, .name = "times" },
-            .arg = &(struct ast_node) { .type = IDENTIFIER, .name = "n" },
-          },
-          .arg = &(struct ast_node) {
-            .type = APPLY,
-            .fn = &(struct ast_node) { .type = IDENTIFIER, .name = "factorial" },
-            .arg = &(struct ast_node) {
-              .type = APPLY,
-              .fn = &(struct ast_node) { .type = IDENTIFIER, .name = "pred" },
-              .arg = &(struct ast_node) { .type = IDENTIFIER, .name = "n" },
-            }
-          }
-        }
-      },
-    },
-    .body = &(struct ast_node) {
-      .type = APPLY,
-      .fn = &(struct ast_node) { .type = IDENTIFIER, .name = "factorial" },
-      .arg = &(struct ast_node) { .type = IDENTIFIER, .name = "5" },
-    }
-  };
-
-  struct lang_type* t;
-  clock_t total = 0;
-#define ITERATIONS 1000000
-  for (int i = 0; i < ITERATIONS; ++i) {
-    ctx.current_type = 16; /* Experimentally determined */
-    clock_t tic = clock();
-    t = analyze(&factorial, my_env, NULL);
-    clock_t toc = clock();
-    total += toc - tic;
-  }
-  print(&factorial, t);
-  fprintf(stdout, "Iterations: %d Total time: %f ns\n",
-      ITERATIONS, (double) (total / CLOCKS_PER_SEC * 1000000));
-  return 0;
-}
 
 char* print_a_type(struct lang_type* t)
 {
@@ -508,4 +393,111 @@ void print(struct ast_node* n, struct lang_type* t)
   printf("%s : %s\n", ast, type);
   free(type);
   free(ast);
+}
+
+int main(void)
+{
+  /* Basic types are constructed with a nullary type constructor */
+  *Integer = (struct lang_type) {
+    .type = OPERATOR, .op_name = "int", .types = NULL, .args = 0
+  };
+  *Bool = (struct lang_type) {
+    .type = OPERATOR, .op_name = "bool", .types = NULL, .args = 0
+  };
+
+  struct lang_type* var1 = Var();
+  struct lang_type* var2 = Var();
+  struct lang_type* pair_type = make_type();
+  *pair_type = (struct lang_type) {
+    .type = OPERATOR,
+    .op_name = "*",
+    .args = 2,
+    .types = { var1, var2 }
+  };
+  struct lang_type* var3 = Var();
+
+  struct env envs[7] = {
+    {
+      .name = "pair",
+      .node = Function(var1, Function(var2, pair_type)),
+      .next = &envs[1]
+    },
+    { .name = "true", .node = Bool, .next = &envs[2] },
+    {
+      .name = "cond",
+      .node = Function(Bool, Function(var3, Function(var3, var3))),
+      .next = &envs[3],
+    },
+    { .name = "zero", .node = Function(Integer, Bool), .next = &envs[4] },
+    { .name = "pred", .node = Function(Integer, Integer), .next = &envs[5] },
+    {
+      .name = "times",
+      .node = Function(Integer, Function(Integer, Integer)),
+      .next = &envs[6]
+    },
+    { .name = "factorial", .node = Function(Integer, Integer), .next = NULL }
+  };
+  struct env* my_env = &envs;
+
+  struct ast_node factorial = {
+    .type = LETREC,
+    .v = "factorial",
+    .defn = &(struct ast_node) {
+      .type = LAMBDA,
+      .v = "n",
+      .body = &(struct ast_node) {
+        .type = APPLY,
+        .fn = &(struct ast_node) {
+          .type = APPLY,
+          .fn = &(struct ast_node) {
+            .type = APPLY,
+            .fn = &(struct ast_node) { .type = IDENTIFIER, .name = "cond" },
+            .arg = &(struct ast_node) {
+              .type = APPLY,
+              .fn = &(struct ast_node) { .type = IDENTIFIER, .name = "zero" },
+              .arg = &(struct ast_node) { .type = IDENTIFIER, .name = "n" }
+            }
+          },
+          .arg = &(struct ast_node) { .type = IDENTIFIER, .name = "1" }
+        },
+        .arg = &(struct ast_node) {
+          .type = APPLY,
+          .fn = &(struct ast_node) {
+            .type = APPLY,
+            .fn = &(struct ast_node) { .type = IDENTIFIER, .name = "times" },
+            .arg = &(struct ast_node) { .type = IDENTIFIER, .name = "n" },
+          },
+          .arg = &(struct ast_node) {
+            .type = APPLY,
+            .fn = &(struct ast_node) { .type = IDENTIFIER, .name = "factorial" },
+            .arg = &(struct ast_node) {
+              .type = APPLY,
+              .fn = &(struct ast_node) { .type = IDENTIFIER, .name = "pred" },
+              .arg = &(struct ast_node) { .type = IDENTIFIER, .name = "n" },
+            }
+          }
+        }
+      },
+    },
+    .body = &(struct ast_node) {
+      .type = APPLY,
+      .fn = &(struct ast_node) { .type = IDENTIFIER, .name = "factorial" },
+      .arg = &(struct ast_node) { .type = IDENTIFIER, .name = "5" },
+    }
+  };
+
+  struct lang_type* t;
+  clock_t total = 0;
+#define ITERATIONS 1000000
+  for (int i = 0; i < ITERATIONS; ++i) {
+    ctx.current_type = 16; /* Experimentally determined */
+    clock_t tic = clock();
+    t = analyze(&factorial, my_env, NULL);
+    clock_t toc = clock();
+    total += toc - tic;
+  }
+  print(&factorial, t);
+  fprintf(stdout, "Iterations: %d Total time: %f ns\n",
+      ITERATIONS, (double) (total / CLOCKS_PER_SEC * 1000000));
+  return 0;
 }

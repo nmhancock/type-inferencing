@@ -1,31 +1,5 @@
 #define MAX_ARGS 2
 
-enum ast_node_type {
-  IDENTIFIER = 0,
-  APPLY = 1,
-  LAMBDA = 2,
-  LET = 3,
-  LETREC = 4
-};
-
-struct ast_node {
-  union {
-    struct {
-      char* name;
-    };
-    struct {
-      struct ast_node* fn;
-      struct ast_node* arg;
-    };
-    struct {
-      char* v;
-      struct ast_node* defn;
-      struct ast_node* body;
-    };
-  };
-  enum ast_node_type type;
-};
-
 enum lang_type_type {
   VARIABLE = 0,
   FUNCTION = 1,
@@ -37,7 +11,6 @@ enum lang_type_type {
   UNIFY_ERROR = -5,
   LOCAL_SCOPE_EXCEEDED = -6,
 };
-
 struct lang_type {
   union {
     struct {
@@ -58,3 +31,37 @@ struct lang_type {
   int id;
   enum lang_type_type type;
 };
+enum ast_node_type {
+  IDENTIFIER = 0,
+  APPLY = 1,
+  LAMBDA = 2,
+  LET = 3,
+  LETREC = 4
+};
+struct ast_node {
+  union {
+    struct {
+      char* name;
+    };
+    struct {
+      struct ast_node* fn;
+      struct ast_node* arg;
+    };
+    struct {
+      char* v;
+      struct ast_node* defn;
+      struct ast_node* body;
+    };
+  };
+  enum ast_node_type type;
+};
+struct env {
+  char* name;
+  struct lang_type* node;
+  struct env* next;
+};
+struct lt_list {
+  struct lang_type* val;
+  struct lt_list* next;
+};
+struct lang_type* analyze(struct ast_node*, struct env*, struct lt_list*);
