@@ -123,7 +123,7 @@ main(void)
 	struct term *t;
 	printf("ctx.current_type: %d\n", ctx.current_type);
 	clock_t total = 0;
-#define ITERATIONS 10000000
+#define ITERATIONS 1000000
 	for(int i = 0; i < ITERATIONS; ++i) {
 		ctx.current_type = 22; /* Experimentally determined */
 		clock_t tic = clock();
