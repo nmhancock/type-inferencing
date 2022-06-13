@@ -1,6 +1,6 @@
 #define MAX_ARGS 2
 
-enum lang_type_type {
+enum term_type {
 	VARIABLE = 0,
 	FUNCTION = 1,
 	OPERATOR = 2,
@@ -12,25 +12,25 @@ enum lang_type_type {
 	LOCAL_SCOPE_EXCEEDED = -6,
 	OUT_OF_TYPES = -7,
 };
-struct lang_type {
+struct term {
 	union {
 		struct {
-			struct lang_type *instance;
+			struct term *instance;
 			char *var_name;
 		};
 		struct {
-			struct lang_type *from_type;
-			struct lang_type *to_type;
+			struct term *from_type;
+			struct term *to_type;
 		};
 		struct {
 			char *op_name;
-			struct lang_type *types[MAX_ARGS];
+			struct term *types[MAX_ARGS];
 			int args;
 		};
 		char *undefined_symbol;
 	};
 	int id;
-	enum lang_type_type type;
+	enum term_type type;
 };
 enum ast_node_type {
 	IDENTIFIER = 0,
@@ -60,11 +60,11 @@ struct ast_node {
 struct lt_list;
 struct env {
 	char *name;
-	struct lang_type *node;
+	struct term *node;
 	struct env *next;
 };
 struct inferencing_ctx;
-struct lang_type *analyze(struct inferencing_ctx *, struct ast_node *,
+struct term *analyze(struct inferencing_ctx *, struct ast_node *,
 			  struct env *, struct lt_list *);
 
-void print(struct ast_node *n, struct lang_type *t);
+void print(struct ast_node *n, struct term *t);

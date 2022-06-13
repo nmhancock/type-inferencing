@@ -10,17 +10,17 @@
 int
 main(void)
 {
-	struct lang_type types[MAX_TYPES];
+	struct term types[MAX_TYPES];
 	struct inferencing_ctx ctx = make_ctx(types, MAX_TYPES);
 
-	struct lang_type *var1 = Var(&ctx);
-	struct lang_type *var2 = Var(&ctx);
-	struct lang_type *pair_type = make_type(&ctx);
-	*pair_type = (struct lang_type){.type = OPERATOR,
+	struct term *var1 = Var(&ctx);
+	struct term *var2 = Var(&ctx);
+	struct term *pair_type = make_type(&ctx);
+	*pair_type = (struct term){.type = OPERATOR,
 					.op_name = "*",
 					.args = 2,
 					.types = {var1, var2}};
-	struct lang_type *var3 = Var(&ctx);
+	struct term *var3 = Var(&ctx);
 
 	struct env envs[7] = {
 		{.name = "pair",
@@ -120,7 +120,7 @@ main(void)
 							     .name = "5"},
 				     }};
 
-	struct lang_type *t;
+	struct term *t;
 	printf("ctx.current_type: %d\n", ctx.current_type);
 	clock_t total = 0;
 #define ITERATIONS 10000000
