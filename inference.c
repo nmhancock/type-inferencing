@@ -8,12 +8,12 @@
 #define MAX_VARS 20 /* Max vars in same context, used in fresh & freshrec */
 
 struct lt_list {
-	struct term *val;
+	struct type *val;
 	struct lt_list *next;
 };
 
-static struct term *
-prune(struct term *t)
+static struct type *
+prune(struct type *t)
 {
 	if(t->type != VARIABLE)
 		return t;
@@ -24,9 +24,9 @@ prune(struct term *t)
 }
 
 static int
-occurs_in_type(struct term *v, struct term *type2)
+occurs_in_type(struct type *v, struct type *type2)
 {
-	struct term *pruned_type2 = prune(type2);
+	struct type *pruned_type2 = prune(type2);
 	if(pruned_type2 == v)
 		return 1;
 	if(pruned_type2->type == OPERATOR)
@@ -37,7 +37,7 @@ occurs_in_type(struct term *v, struct term *type2)
 }
 
 static int
-is_generic(struct term *v, struct lt_list *ngs)
+is_generic(struct type *v, struct lt_list *ngs)
 {
 	/* Flip the return value because we're checking ngss for a generic */
 	while(ngs != NULL) {
@@ -49,17 +49,17 @@ is_generic(struct term *v, struct lt_list *ngs)
 }
 
 struct _mp_item {
-	struct term *from;
-	struct term *to;
+	struct type *from;
+	struct type *to;
 	struct _mp_item *next;
 };
 
-static struct term *
+static struct type *
 freshrec(struct inferencing_ctx *ctx,
-	 struct term *tp, struct lt_list *ngs,
+	 struct type *tp, struct lt_list *ngs,
 	 struct _mp_item *map)
 {
-	struct term *p = prune(tp);
+	struct type *p = prune(tp);
 	switch(p->type) {
 	case VARIABLE: {
 		if(!is_generic(p, ngs))
@@ -78,8 +78,8 @@ freshrec(struct inferencing_ctx *ctx,
 		return cur->to;
 	}
 	case OPERATOR: {
-		struct term *ret = make_type(ctx);
-		*ret = (struct term){.type = OPERATOR,
+		struct type *ret = make_type(ctx);
+		*ret = (struct type){.type = OPERATOR,
 				     .op_name = p->op_name,
 				     .args = p->args};
 		for(int i = 0; i < ret->args; ++i) {
@@ -92,8 +92,8 @@ freshrec(struct inferencing_ctx *ctx,
 	}
 }
 
-static struct term *
-fresh(struct inferencing_ctx *ctx, struct term *t,
+static struct type *
+fresh(struct inferencing_ctx *ctx, struct type *t,
       struct lt_list *ngs)
 {
 	struct _mp_item map[MAX_VARS];
@@ -107,7 +107,7 @@ fresh(struct inferencing_ctx *ctx, struct term *t,
 	return freshrec(ctx, t, ngs, map);
 }
 
-static struct term *
+static struct type *
 get_type(struct inferencing_ctx *ctx, char *name,
 	 struct env *env, struct lt_list *ngs)
 {
@@ -124,12 +124,12 @@ get_type(struct inferencing_ctx *ctx, char *name,
 	return Err(ctx, UNDEFINED_SYMBOL, name);
 }
 
-static struct term *
+static struct type *
 unify(struct inferencing_ctx *ctx,
-      struct term *t1, struct term *t2)
+      struct type *t1, struct type *t2)
 {
-	struct term *a = prune(t1);
-	struct term *b = prune(t2);
+	struct type *a = prune(t1);
+	struct type *b = prune(t2);
 
 	switch(a->type) {
 	case VARIABLE:
@@ -159,39 +159,39 @@ unify(struct inferencing_ctx *ctx,
 	}
 }
 
-struct term *
-analyze(struct inferencing_ctx *ctx, struct ast_node *node,
+struct type *
+analyze(struct inferencing_ctx *ctx, struct term *node,
 	struct env *env, struct lt_list *ngs)
 {
 	switch(node->type) {
 	case IDENTIFIER:
 		return get_type(ctx, node->name, env, ngs);
 	case APPLY: {
-		struct term *fun_type = analyze(ctx, node->fn, env, ngs);
+		struct type *fun_type = analyze(ctx, node->fn, env, ngs);
 		if(fun_type->type < 0)
 			return fun_type;
-		struct term *arg_type = analyze(ctx, node->arg, env, ngs);
+		struct type *arg_type = analyze(ctx, node->arg, env, ngs);
 		if(arg_type->type < 0)
 			return arg_type;
-		struct term *result_type = Var(ctx);
+		struct type *result_type = Var(ctx);
 		(void)unify(ctx, Function(ctx, arg_type, result_type),
 			    fun_type);
 		return result_type;
 	}
 	case LAMBDA: {
-		struct term *arg_type = Var(ctx);
+		struct type *arg_type = Var(ctx);
 		struct env new_env = {.name = node->v,
 				      .node = arg_type,
 				      .next = env};
 		struct lt_list new_ng = {.val = arg_type, .next = ngs};
-		struct term *result_type =
+		struct type *result_type =
 			analyze(ctx, node->body, &new_env, &new_ng);
 		if(result_type->type < 0)
 			return result_type;
 		return Function(ctx, arg_type, result_type);
 	}
 	case LET: {
-		struct term *defn_type =
+		struct type *defn_type =
 			analyze(ctx, node->defn, env, ngs);
 		if(defn_type->type < 0)
 			return defn_type;
@@ -201,12 +201,12 @@ analyze(struct inferencing_ctx *ctx, struct ast_node *node,
 		return analyze(ctx, node->body, &new_env, ngs);
 	}
 	case LETREC: {
-		struct term *new_type = Var(ctx);
+		struct type *new_type = Var(ctx);
 		struct env new_env = {.name = node->v,
 				      .node = new_type,
 				      .next = env};
 		struct lt_list new_ng = {.val = new_type, .next = ngs};
-		struct term *defn_type =
+		struct type *defn_type =
 			analyze(ctx, node->defn, &new_env, &new_ng);
 		if(defn_type->type < 0)
 			return defn_type;

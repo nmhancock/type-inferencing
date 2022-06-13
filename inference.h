@@ -1,6 +1,6 @@
 #define MAX_ARGS 2
 
-enum term_type {
+enum type_type {
 	VARIABLE = 0,
 	FUNCTION = 1,
 	OPERATOR = 2,
@@ -12,59 +12,59 @@ enum term_type {
 	LOCAL_SCOPE_EXCEEDED = -6,
 	OUT_OF_TYPES = -7,
 };
-struct term {
+struct type {
 	union {
 		struct {
-			struct term *instance;
+			struct type *instance;
 			char *var_name;
 		};
 		struct {
-			struct term *from_type;
-			struct term *to_type;
+			struct type *from_type;
+			struct type *to_type;
 		};
 		struct {
 			char *op_name;
-			struct term *types[MAX_ARGS];
+			struct type *types[MAX_ARGS];
 			int args;
 		};
 		char *undefined_symbol;
 	};
 	int id;
-	enum term_type type;
+	enum type_type type;
 };
-enum ast_node_type {
+enum term_type {
 	IDENTIFIER = 0,
 	APPLY = 1,
 	LAMBDA = 2,
 	LET = 3,
 	LETREC = 4
 };
-struct ast_node {
+struct term {
 	union {
 		struct {
 			char *name;
 		};
 		struct {
-			struct ast_node *fn;
-			struct ast_node *arg;
+			struct term *fn;
+			struct term *arg;
 		};
 		struct {
 			char *v;
-			struct ast_node *defn;
-			struct ast_node *body;
+			struct term *defn;
+			struct term *body;
 		};
 	};
-	enum ast_node_type type;
+	enum term_type type;
 };
 
 struct lt_list;
 struct env {
 	char *name;
-	struct term *node;
+	struct type *node;
 	struct env *next;
 };
 struct inferencing_ctx;
-struct term *analyze(struct inferencing_ctx *, struct ast_node *,
+struct type *analyze(struct inferencing_ctx *, struct term *,
 		     struct env *, struct lt_list *);
 
-void print(struct ast_node *, struct term *);
+void print(struct term *, struct type *);

@@ -4,7 +4,7 @@
 #include "inference.h"
 
 static char *
-print_a_type(struct term *t)
+print_a_type(struct type *t)
 {
 	char *ret;
 	if(!t) {
@@ -58,7 +58,7 @@ print_a_type(struct term *t)
 }
 
 static void
-print_type(struct term *t)
+print_type(struct type *t)
 {
 	char *res = print_a_type(t);
 	if(!res)
@@ -69,7 +69,7 @@ print_type(struct term *t)
 }
 
 static char *
-print_ast_node(struct ast_node *n)
+print_term(struct term *n)
 {
 	char *ret;
 	if(!n) {
@@ -82,22 +82,22 @@ print_ast_node(struct ast_node *n)
 		return ret;
 	}
 	case APPLY: {
-		char *fn = print_ast_node(n->fn);
-		char *arg = print_ast_node(n->arg);
+		char *fn = print_term(n->fn);
+		char *arg = print_term(n->arg);
 		asprintf(&ret, "(%s %s)", fn ? fn : "NULL", arg ? arg : "NULL");
 		free(fn);
 		free(arg);
 		return ret;
 	}
 	case LAMBDA: {
-		char *body = print_ast_node(n->body);
+		char *body = print_term(n->body);
 		asprintf(&ret, "(fn %s => %s)", n->v, body ? body : "NULL");
 		free(body);
 		return ret;
 	}
 	case LET: {
-		char *body = print_ast_node(n->body);
-		char *defn = print_ast_node(n->defn);
+		char *body = print_term(n->body);
+		char *defn = print_term(n->defn);
 		asprintf(&ret, "(let %s = %s in %s)", n->v,
 			 defn ? defn : "NULL", body ? body : "NULL");
 		free(defn);
@@ -105,8 +105,8 @@ print_ast_node(struct ast_node *n)
 		return ret;
 	}
 	case LETREC: {
-		char *body = print_ast_node(n->body);
-		char *defn = print_ast_node(n->defn);
+		char *body = print_term(n->body);
+		char *defn = print_term(n->defn);
 		asprintf(&ret, "(letrec %s = %s in %s)", n->v,
 			 defn ? defn : "NULL", body ? body : "NULL");
 		free(defn);
@@ -118,9 +118,9 @@ print_ast_node(struct ast_node *n)
 }
 
 static void
-print_ast(struct ast_node *n)
+print_ast(struct term *n)
 {
-	char *res = print_ast_node(n);
+	char *res = print_term(n);
 	if(!res)
 		printf("NULL\n");
 	else
@@ -129,9 +129,9 @@ print_ast(struct ast_node *n)
 }
 
 void
-print(struct ast_node *n, struct term *t)
+print(struct term *n, struct type *t)
 {
-	char *ast = print_ast_node(n);
+	char *ast = print_term(n);
 	char *type = print_a_type(t);
 	printf("%s : %s\n", ast, type);
 	free(type);

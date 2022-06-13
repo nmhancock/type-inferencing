@@ -10,17 +10,17 @@
 int
 main(void)
 {
-	struct term types[MAX_TYPES];
+	struct type types[MAX_TYPES];
 	struct inferencing_ctx ctx = make_ctx(types, MAX_TYPES);
 
-	struct term *var1 = Var(&ctx);
-	struct term *var2 = Var(&ctx);
-	struct term *pair_type = make_type(&ctx);
-	*pair_type = (struct term){.type = OPERATOR,
+	struct type *var1 = Var(&ctx);
+	struct type *var2 = Var(&ctx);
+	struct type *pair_type = make_type(&ctx);
+	*pair_type = (struct type){.type = OPERATOR,
 				   .op_name = "*",
 				   .args = 2,
 				   .types = {var1, var2}};
-	struct term *var3 = Var(&ctx);
+	struct type *var3 = Var(&ctx);
 
 	struct env envs[7] = {
 		{.name = "pair",
@@ -49,83 +49,83 @@ main(void)
 		 .next = NULL}};
 	struct env *my_env = envs;
 
-	struct ast_node factorial = {.type = LETREC,
+	struct term factorial = {.type = LETREC,
 				     .v = "factorial",
 				     .defn =
-					     &(struct ast_node){
+					     &(struct term){
 						     .type = LAMBDA,
 						     .v = "n",
 						     .body =
-							     &(struct ast_node){
+							     &(struct term){
 								     .type = APPLY,
 								     .fn =
 									     &(
-										     struct ast_node){.type = APPLY,
+										     struct term){.type = APPLY,
 												      .fn =
-													      &(struct ast_node){.type = APPLY,
+													      &(struct term){.type = APPLY,
 																 .fn =
-																	 &(struct ast_node){
+																	 &(struct term){
 																		 .type = IDENTIFIER,
 																		 .name = "cond"},
 																 .arg =
-																	 &(struct ast_node){
+																	 &(struct term){
 																		 .type = APPLY,
 																		 .fn = &(struct
-																			 ast_node){.type = IDENTIFIER,
+																			 term){.type = IDENTIFIER,
 																				   .name = "zero"},
 																		 .arg = &(
 																			 struct
-																			 ast_node){.type = IDENTIFIER, .name = "n"}}},
+																			 term){.type = IDENTIFIER, .name = "n"}}},
 												      .arg =
-													      &(struct ast_node){
+													      &(struct term){
 														      .type = IDENTIFIER,
 														      .name = "1"}},
-								     .arg = &(struct ast_node){.type = APPLY,
+								     .arg = &(struct term){.type = APPLY,
 											       .fn =
-												       &(struct ast_node){
+												       &(struct term){
 													       .type = APPLY,
 													       .fn =
 														       &(struct
-															 ast_node){.type = IDENTIFIER,
+															 term){.type = IDENTIFIER,
 																   .name = "times"},
 													       .arg =
-														       &(struct ast_node){
+														       &(struct term){
 															       .type = IDENTIFIER,
 															       .name = "n"},
 												       },
 											       .arg = &(struct
-													ast_node){.type = APPLY,
-														  .fn = &(struct ast_node){.type = IDENTIFIER, .name = "factorial"},
+													term){.type = APPLY,
+														  .fn = &(struct term){.type = IDENTIFIER, .name = "factorial"},
 														  .arg =
-															  &(struct ast_node){
+															  &(struct term){
 																  .type = APPLY,
 																  .fn =
 																	  &(struct
-																	    ast_node){.type = IDENTIFIER,
+																	    term){.type = IDENTIFIER,
 																		      .name = "pred"},
 																  .arg =
-																	  &(struct ast_node){.type = IDENTIFIER,
+																	  &(struct term){.type = IDENTIFIER,
 																			     .name = "n"},
 															  }}}},
 					     },
-				     .body = &(struct ast_node){
+				     .body = &(struct term){
 					     .type = APPLY,
 					     .fn =
-						     &(struct ast_node){
+						     &(struct term){
 							     .type = IDENTIFIER,
 							     .name = "factorial"},
 					     .arg =
-						     &(struct ast_node){
+						     &(struct term){
 							     .type = IDENTIFIER,
 							     .name = "5"},
 				     }};
 
-	struct term *t = NULL;
+	struct type *t = NULL;
 	printf("ctx.current_type: %d\n", ctx.current_type);
 	clock_t total = 0;
 #define ITERATIONS 1000000
 	for(int i = 0; i < ITERATIONS; ++i) {
-		ctx.current_type = 22; /* Experimentally determined */
+		ctx.current_type = 22; /* Experimentally detypeined */
 		clock_t tic = clock();
 		t = analyze(&ctx, &factorial, my_env, NULL);
 		clock_t toc = clock();
