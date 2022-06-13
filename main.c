@@ -17,9 +17,9 @@ main(void)
 	struct term *var2 = Var(&ctx);
 	struct term *pair_type = make_type(&ctx);
 	*pair_type = (struct term){.type = OPERATOR,
-					.op_name = "*",
-					.args = 2,
-					.types = {var1, var2}};
+				   .op_name = "*",
+				   .args = 2,
+				   .types = {var1, var2}};
 	struct term *var3 = Var(&ctx);
 
 	struct env envs[7] = {
@@ -120,7 +120,7 @@ main(void)
 							     .name = "5"},
 				     }};
 
-	struct term *t;
+	struct term *t = NULL;
 	printf("ctx.current_type: %d\n", ctx.current_type);
 	clock_t total = 0;
 #define ITERATIONS 1000000

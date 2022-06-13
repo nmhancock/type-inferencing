@@ -3,7 +3,7 @@
 #include "inference.h"
 #include "context.h"
 
-char *function_name = "->";
+static char *function_name = "->";
 
 struct inferencing_ctx
 make_ctx(struct term *types, int max_types)
@@ -18,26 +18,26 @@ make_ctx(struct term *types, int max_types)
 		return ctx;
 	}
 	*cur++ = (struct term){.type = OUT_OF_TYPES,
-				    .undefined_symbol = NULL};
+			       .undefined_symbol = NULL};
 	*cur++ = (struct term){.type = LOCAL_SCOPE_EXCEEDED,
-				    .undefined_symbol = NULL};
+			       .undefined_symbol = NULL};
 	*cur++ = (struct term){.type = UNIFY_ERROR,
-				    .undefined_symbol = NULL};
+			       .undefined_symbol = NULL};
 	*cur++ = (struct term){.type = TYPE_MISMATCH,
-				    .undefined_symbol = NULL};
+			       .undefined_symbol = NULL};
 	*cur++ = (struct term){.type = RECURSIVE_UNIFICATION,
-				    .undefined_symbol = NULL};
+			       .undefined_symbol = NULL};
 	*cur++ = (struct term){.type = UNDEFINED_SYMBOL,
-				    .undefined_symbol = NULL};
+			       .undefined_symbol = NULL};
 	*cur++ = (struct term){.type = UNHANDLED_SYNTAX_NODE,
-				    .undefined_symbol = NULL};
+			       .undefined_symbol = NULL};
 	/* Basic types are constructed with a nullary type constructor */
 	*cur++ = (struct term){
 		.type = OPERATOR, .op_name = "int", .types = {NULL}, .args = 0};
 	*cur++ = (struct term){.type = OPERATOR,
-				    .op_name = "bool",
-				    .types = {NULL},
-				    .args = 0};
+			       .op_name = "bool",
+			       .types = {NULL},
+			       .args = 0};
 	ctx.current_type = 8;
 	return ctx;
 }

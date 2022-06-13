@@ -80,8 +80,8 @@ freshrec(struct inferencing_ctx *ctx,
 	case OPERATOR: {
 		struct term *ret = make_type(ctx);
 		*ret = (struct term){.type = OPERATOR,
-					  .op_name = p->op_name,
-					  .args = p->args};
+				     .op_name = p->op_name,
+				     .args = p->args};
 		for(int i = 0; i < ret->args; ++i) {
 			ret->types[i] = freshrec(ctx, p->types[i], ngs, map);
 		}
@@ -90,7 +90,7 @@ freshrec(struct inferencing_ctx *ctx,
 	default:
 		return Err(ctx, UNIFY_ERROR, NULL);
 	}
-};
+}
 
 static struct term *
 fresh(struct inferencing_ctx *ctx, struct term *t,
