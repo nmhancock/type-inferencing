@@ -1,6 +1,8 @@
 #include <stddef.h>
 
-#include "type-inference.h"
+#include "inference.h"
+#include "context.h"
+
 char *function_name = "->";
 
 struct inferencing_ctx make_ctx(struct lang_type *types, int max_types)

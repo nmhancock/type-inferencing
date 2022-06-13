@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "type-inference.h"
+#include "inference.h"
 
 static char *print_a_type(struct lang_type *t)
 {

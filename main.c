@@ -3,7 +3,8 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include "type-inference.h"
+#include "inference.h"
+#include "context.h"
 
 #define MAX_TYPES 200
 int main(void)
@@ -122,7 +123,7 @@ int main(void)
 	struct lang_type *t;
 	printf("ctx.current_type: %d\n", ctx.current_type);
 	clock_t total = 0;
-#define ITERATIONS 1000000
+#define ITERATIONS 10000000
 	for (int i = 0; i < ITERATIONS; ++i) {
 		ctx.current_type = 22; /* Experimentally determined */
 		clock_t tic = clock();
@@ -133,5 +134,6 @@ int main(void)
 	fprintf(stdout, "Iterations: %d Total time: %f ns\n", ITERATIONS,
 		(double)(total / CLOCKS_PER_SEC * 1000000));
 	print(&factorial, t);
+        printf("DEBUG: %d\n", ctx.current_type);
 	return 0;
 }

@@ -2,7 +2,8 @@
 #include <stdlib.h> // strtol
 #include <string.h> // strcmp
 
-#include "type-inference.h"
+#include "inference.h"
+#include "context.h"
 
 #define MAX_VARS 20 /* Max vars in same context, used in fresh & freshrec */
 
