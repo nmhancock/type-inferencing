@@ -60,8 +60,6 @@ struct env {
 	struct lang_type *node;
 	struct env *next;
 };
-struct lt_list {
-	struct lang_type *val;
-	struct lt_list *next;
-};
-struct lang_type *analyze(struct ast_node *, struct env *, struct lt_list *);
+struct lt_list;
+struct inferencing_ctx;
+struct lang_type *analyze(struct inferencing_ctx*, struct ast_node *, struct env *, struct lt_list *);

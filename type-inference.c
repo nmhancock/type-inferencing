@@ -10,30 +10,33 @@
 #define MAX_VARS 20 /* Max vars in same context, used in fresh & freshrec */
 #define MAX_TYPES 200 /* Max total types, used in global below */
 
-/* Global context to keep function signatures the same */
-struct lang_type types[MAX_TYPES];
-struct lang_type *Integer = &types[0];
-struct lang_type *Bool = &types[1];
 struct inferencing_ctx {
 	struct lang_type *types;
 	int current_type;
 };
-struct inferencing_ctx ctx = { .types = &types, .current_type = 2 };
+struct lt_list {
+	struct lang_type *val;
+	struct lt_list *next;
+};
+
+/* Temporary globals */
+struct lang_type *Integer;
+struct lang_type *Bool;
 
 /* Debugging functions */
 static void print_ast(struct ast_node *n);
 static void print_type(struct lang_type *t);
 
-static struct lang_type *make_type(void)
+static struct lang_type *make_type(struct inferencing_ctx* ctx)
 {
-	assert(ctx.current_type < MAX_TYPES);
-	ctx.types[ctx.current_type].id = ctx.current_type;
-	return &ctx.types[ctx.current_type++];
+	assert(ctx->current_type < MAX_TYPES);
+	ctx->types[ctx->current_type].id = ctx->current_type;
+	return &ctx->types[ctx->current_type++];
 }
 
-static struct lang_type *Var()
+static struct lang_type *Var(struct inferencing_ctx* ctx)
 {
-	struct lang_type *result_type = make_type();
+	struct lang_type *result_type = make_type(ctx);
 	*result_type = (struct lang_type){
 		.type = VARIABLE,
 		.instance = NULL,
@@ -43,10 +46,10 @@ static struct lang_type *Var()
 }
 
 static char *fname = "->";
-static struct lang_type *Function(struct lang_type *arg_t,
+static struct lang_type *Function(struct inferencing_ctx* ctx, struct lang_type *arg_t,
 				  struct lang_type *res_t)
 {
-	struct lang_type *function = make_type();
+	struct lang_type *function = make_type(ctx);
 	/* Unrolling the constructor to keep the same form as the old code. */
 	*function = (struct lang_type){
 		.type = OPERATOR,
@@ -57,9 +60,9 @@ static struct lang_type *Function(struct lang_type *arg_t,
 	return function;
 }
 
-static struct lang_type *Err(enum lang_type_type err, char *symbol)
+static struct lang_type *Err(struct inferencing_ctx* ctx, enum lang_type_type err, char *symbol)
 {
-	struct lang_type *error = make_type();
+	struct lang_type *error = make_type(ctx);
 	*error = (struct lang_type){ .type = err, .undefined_symbol = symbol };
 	return error;
 }
@@ -103,7 +106,7 @@ struct _mp_item {
 	struct _mp_item *next;
 };
 
-static struct lang_type *freshrec(struct lang_type *tp, struct lt_list *ngs,
+static struct lang_type *freshrec(struct inferencing_ctx* ctx, struct lang_type *tp, struct lt_list *ngs,
 				  struct _mp_item *map)
 {
 	struct lang_type *p = prune(tp);
@@ -119,27 +122,27 @@ static struct lang_type *freshrec(struct lang_type *tp, struct lt_list *ngs,
 			cur = cur->next;
 		}
 		if (cur == NULL)
-			return Err(LOCAL_SCOPE_EXCEEDED, NULL);
+			return Err(ctx, LOCAL_SCOPE_EXCEEDED, NULL);
 		cur->from = p;
-		cur->to = Var();
+		cur->to = Var(ctx);
 		return cur->to;
 	}
 	case OPERATOR: {
-		struct lang_type *ret = make_type();
+		struct lang_type *ret = make_type(ctx);
 		*ret = (struct lang_type){ .type = OPERATOR,
 					   .op_name = p->op_name,
 					   .args = p->args };
 		for (int i = 0; i < ret->args; ++i) {
-			ret->types[i] = freshrec(p->types[i], ngs, map);
+			ret->types[i] = freshrec(ctx, p->types[i], ngs, map);
 		}
 		return ret;
 	}
 	default:
-		return Err(UNIFY_ERROR, NULL);
+		return Err(ctx, UNIFY_ERROR, NULL);
 	}
 };
 
-static struct lang_type *fresh(struct lang_type *t, struct lt_list *ngs)
+static struct lang_type *fresh(struct inferencing_ctx* ctx, struct lang_type *t, struct lt_list *ngs)
 {
 	struct _mp_item map[MAX_VARS];
 	for (int i = 0; i < MAX_VARS - 1; ++i) {
@@ -149,10 +152,10 @@ static struct lang_type *fresh(struct lang_type *t, struct lt_list *ngs)
 	for (int i = 0; i < MAX_VARS; ++i) {
 		map[i].from = map[i].to = NULL;
 	}
-	return freshrec(t, ngs, map);
+	return freshrec(ctx, t, ngs, map);
 }
 
-static struct lang_type *get_type(char *name, struct env *env,
+static struct lang_type *get_type(struct inferencing_ctx* ctx, char *name, struct env *env,
 				  struct lt_list *ngs)
 {
 	long l = strtol(name, NULL, 0);
@@ -162,13 +165,13 @@ static struct lang_type *get_type(char *name, struct env *env,
 	struct env *cur = env;
 	while (cur != NULL) {
 		if (!strcmp(name, cur->name))
-			return fresh(cur->node, ngs);
+			return fresh(ctx, cur->node, ngs);
 		cur = cur->next;
 	}
-	return Err(UNDEFINED_SYMBOL, name);
+	return Err(ctx, UNDEFINED_SYMBOL, name);
 }
 
-static struct lang_type *unify(struct lang_type *t1, struct lang_type *t2)
+static struct lang_type *unify(struct inferencing_ctx* ctx, struct lang_type *t1, struct lang_type *t2)
 {
 	struct lang_type *a = prune(t1);
 	struct lang_type *b = prune(t2);
@@ -178,18 +181,18 @@ static struct lang_type *unify(struct lang_type *t1, struct lang_type *t2)
 		if (a == b)
 			return a;
 		if (occurs_in_type(a, b))
-			return Err(RECURSIVE_UNIFICATION, NULL);
+			return Err(ctx, RECURSIVE_UNIFICATION, NULL);
 		a->instance = b;
 		return a;
 	case OPERATOR:
 		if (b->type == VARIABLE)
-			return unify(b, a);
+			return unify(ctx, b, a);
 		if (b->type == OPERATOR) {
 			if (strcmp(a->op_name, b->op_name) ||
 			    a->args != b->args)
-				Err(TYPE_MISMATCH, NULL);
+				Err(ctx, TYPE_MISMATCH, NULL);
 			for (int i = 0; i < a->args; ++i)
-				(void)unify(a->types[i], b->types[i]);
+				(void)unify(ctx, a->types[i], b->types[i]);
 			return a;
 		}
 	default:
@@ -197,63 +200,63 @@ static struct lang_type *unify(struct lang_type *t1, struct lang_type *t2)
 			return a;
 		if (b->type < 0)
 			return b;
-		return Err(UNIFY_ERROR, NULL);
+		return Err(ctx, UNIFY_ERROR, NULL);
 	}
 }
 
-struct lang_type *analyze(struct ast_node *node, struct env *env,
+struct lang_type *analyze(struct inferencing_ctx* ctx, struct ast_node *node, struct env *env,
 			  struct lt_list *ngs)
 {
 	switch (node->type) {
 	case IDENTIFIER:
-		return get_type(node->name, env, ngs);
+		return get_type(ctx, node->name, env, ngs);
 	case APPLY: {
-		struct lang_type *fun_type = analyze(node->fn, env, ngs);
+		struct lang_type *fun_type = analyze(ctx, node->fn, env, ngs);
 		if (fun_type->type < 0)
 			return fun_type;
-		struct lang_type *arg_type = analyze(node->arg, env, ngs);
+		struct lang_type *arg_type = analyze(ctx, node->arg, env, ngs);
 		if (arg_type->type < 0)
 			return arg_type;
-		struct lang_type *result_type = Var();
-		(void)unify(Function(arg_type, result_type), fun_type);
+		struct lang_type *result_type = Var(ctx);
+		(void)unify(ctx, Function(ctx, arg_type, result_type), fun_type);
 		return result_type;
 	}
 	case LAMBDA: {
-		struct lang_type *arg_type = Var();
+		struct lang_type *arg_type = Var(ctx);
 		struct env new_env = { .name = node->v,
 				       .node = arg_type,
 				       .next = env };
 		struct lt_list new_ng = { .val = arg_type, .next = ngs };
 		struct lang_type *result_type =
-			analyze(node->body, &new_env, &new_ng);
+			analyze(ctx, node->body, &new_env, &new_ng);
 		if (result_type->type < 0)
 			return result_type;
-		return Function(arg_type, result_type);
+		return Function(ctx, arg_type, result_type);
 	}
 	case LET: {
-		struct lang_type *defn_type = analyze(node->defn, env, ngs);
+		struct lang_type *defn_type = analyze(ctx, node->defn, env, ngs);
 		if (defn_type->type < 0)
 			return defn_type;
 		struct env new_env = { .name = node->v,
 				       .node = defn_type,
 				       .next = env };
-		return analyze(node->body, &new_env, ngs);
+		return analyze(ctx, node->body, &new_env, ngs);
 	}
 	case LETREC: {
-		struct lang_type *new_type = Var();
+		struct lang_type *new_type = Var(ctx);
 		struct env new_env = { .name = node->v,
 				       .node = new_type,
 				       .next = env };
 		struct lt_list new_ng = { .val = new_type, .next = ngs };
 		struct lang_type *defn_type =
-			analyze(node->defn, &new_env, &new_ng);
+			analyze(ctx, node->defn, &new_env, &new_ng);
 		if (defn_type->type < 0)
 			return defn_type;
-		(void)unify(new_type, defn_type);
-		return analyze(node->body, &new_env, ngs);
+		(void)unify(ctx, new_type, defn_type);
+		return analyze(ctx, node->body, &new_env, ngs);
 	}
 	default:
-		return Err(UNHANDLED_SYNTAX_NODE, NULL);
+		return Err(ctx, UNHANDLED_SYNTAX_NODE, NULL);
 	}
 }
 
@@ -397,6 +400,11 @@ void print(struct ast_node *n, struct lang_type *t)
 
 int main(void)
 {
+        struct lang_type types[MAX_TYPES];
+        struct inferencing_ctx ctx = { .types = &types, .current_type = 2 };
+        Integer = &types[0];
+        Bool = &types[1];
+
 	/* Basic types are constructed with a nullary type constructor */
 	*Integer = (struct lang_type){
 		.type = OPERATOR, .op_name = "int", .types = NULL, .args = 0
@@ -405,37 +413,37 @@ int main(void)
 		.type = OPERATOR, .op_name = "bool", .types = NULL, .args = 0
 	};
 
-	struct lang_type *var1 = Var();
-	struct lang_type *var2 = Var();
-	struct lang_type *pair_type = make_type();
+	struct lang_type *var1 = Var(&ctx);
+	struct lang_type *var2 = Var(&ctx);
+	struct lang_type *pair_type = make_type(&ctx);
 	*pair_type = (struct lang_type){ .type = OPERATOR,
 					 .op_name = "*",
 					 .args = 2,
 					 .types = { var1, var2 } };
-	struct lang_type *var3 = Var();
+	struct lang_type *var3 = Var(&ctx);
 
 	struct env envs[7] = {
 		{ .name = "pair",
-		  .node = Function(var1, Function(var2, pair_type)),
+		  .node = Function(&ctx, var1, Function(&ctx, var2, pair_type)),
 		  .next = &envs[1] },
 		{ .name = "true", .node = Bool, .next = &envs[2] },
 		{
 			.name = "cond",
-			.node = Function(Bool,
-					 Function(var3, Function(var3, var3))),
+			.node = Function(&ctx, Bool,
+					 Function(&ctx, var3, Function(&ctx, var3, var3))),
 			.next = &envs[3],
 		},
 		{ .name = "zero",
-		  .node = Function(Integer, Bool),
+		  .node = Function(&ctx, Integer, Bool),
 		  .next = &envs[4] },
 		{ .name = "pred",
-		  .node = Function(Integer, Integer),
+		  .node = Function(&ctx, Integer, Integer),
 		  .next = &envs[5] },
 		{ .name = "times",
-		  .node = Function(Integer, Function(Integer, Integer)),
+		  .node = Function(&ctx, Integer, Function(&ctx, Integer, Integer)),
 		  .next = &envs[6] },
 		{ .name = "factorial",
-		  .node = Function(Integer, Integer),
+		  .node = Function(&ctx, Integer, Integer),
 		  .next = NULL }
 	};
 	struct env *my_env = &envs;
@@ -517,7 +525,7 @@ int main(void)
 	for (int i = 0; i < ITERATIONS; ++i) {
 		ctx.current_type = 16; /* Experimentally determined */
 		clock_t tic = clock();
-		t = analyze(&factorial, my_env, NULL);
+		t = analyze(&ctx, &factorial, my_env, NULL);
 		clock_t toc = clock();
 		total += toc - tic;
 	}
