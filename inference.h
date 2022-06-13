@@ -65,6 +65,6 @@ struct env {
 };
 struct inferencing_ctx;
 struct term *analyze(struct inferencing_ctx *, struct ast_node *,
-			  struct env *, struct lt_list *);
+		     struct env *, struct lt_list *);
 
-void print(struct ast_node *n, struct term *t);
+void print(struct ast_node *, struct term *);
