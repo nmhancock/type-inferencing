@@ -1,5 +1,5 @@
 HM Type Inferencing in C, translated from
-[Robert Smallshire's](https://web.archive.org/web/20170109072845/http://smallshire.org.uk/sufficientlysmall/2010/04/11/a-hindley-milner-type-inference-implementation-in-python/)
+[Robert Smallshire's](https://github.com/rob-smallshire/hindley-milner-python)
 Python implementation.
 
 The translation is largely straight forward, and contains minimal optimizations
