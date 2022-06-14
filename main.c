@@ -70,11 +70,11 @@ main(void)
 		.body = &(Term){.type = APPLY, .fn = &(Term){.type = IDENTIFIER, .name = "factorial"}, .arg = &(Term){.type = IDENTIFIER, .name = "5"}}};
 
 	Type *t = NULL;
-	printf("ctx.current_type: %d\n", ctx.current_type);
+	printf("ctx.use: %d\n", ctx.use);
 	clock_t total = 0;
 #define ITERATIONS 1000000
 	for(int i = 0; i < ITERATIONS; ++i) {
-		ctx.current_type = 22; /* Experimentally determined */
+		ctx.use = 22; /* Experimentally determined */
 		clock_t tic = clock();
 		t = analyze(&ctx, &factorial, my_env, NULL);
 		clock_t toc = clock();
@@ -83,6 +83,6 @@ main(void)
 	fprintf(stdout, "Iterations: %d Total time: %f ns\n", ITERATIONS,
 		(double)(total / CLOCKS_PER_SEC * 1000000));
 	print(&factorial, t);
-	printf("DEBUG: %d\n", ctx.current_type);
+	printf("DEBUG: %d\n", ctx.use);
 	return 0;
 }

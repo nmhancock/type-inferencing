@@ -1,6 +1,6 @@
 typedef struct Inferencer {
-	int current_type;
-	int max_types;
+	int use;
+	int cap;
 	Type *types;
 } Inferencer;
 

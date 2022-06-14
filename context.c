@@ -9,12 +9,12 @@ Inferencer
 make_ctx(Type *types, int max_types)
 {
 	Inferencer ctx = {.types = types,
-			  .current_type = 0,
-			  .max_types = max_types};
-	Type *cur = &ctx.types[ctx.current_type];
+			  .use = 0,
+			  .cap = max_types};
+	Type *cur = &ctx.types[ctx.use];
 	/* Preallocate errors to avoid that failure case. */
 	if(max_types < 10) {
-		ctx.current_type = ctx.max_types = -1;
+		ctx.use = ctx.cap = -1;
 		return ctx;
 	}
 	*cur++ = (Type){.type = OUT_OF_TYPES,
@@ -38,16 +38,16 @@ make_ctx(Type *types, int max_types)
 			.op_name = "bool",
 			.types = {NULL},
 			.args = 0};
-	ctx.current_type = 8;
+	ctx.use = 8;
 	return ctx;
 }
 Type *
 make_type(Inferencer *ctx)
 {
-	if(ctx->current_type == ctx->max_types)
+	if(ctx->use == ctx->cap)
 		return &ctx->types[0];
-	ctx->types[ctx->current_type].id = ctx->current_type;
-	return &ctx->types[ctx->current_type++];
+	ctx->types[ctx->use].id = ctx->use;
+	return &ctx->types[ctx->use++];
 }
 Type *
 Err(Inferencer *ctx, type_t err, char *symbol)
