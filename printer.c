@@ -51,6 +51,9 @@ print_a_type(Type *t)
 	case UNIFY_ERROR:
 		asprintf(&ret, "Unification error");
 		return ret;
+	case OUT_OF_TYPES:
+		asprintf(&ret, "Out of types!");
+		return ret;
 	default:
 		asprintf(&ret, "Unexpected Type: %d", t->type);
 		return ret;

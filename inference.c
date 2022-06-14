@@ -3,7 +3,6 @@
 #include <string.h>	   // strcmp
 
 #include "inference.h"
-#include "context.h"
 
 #define MAX_VARS 20 /* Max vars in same context, used in fresh & freshrec */
 
@@ -75,6 +74,8 @@ static Type *
 freshrec(Inferencer *ctx, Type *tp, TypeList *ngs, TypeMap *map)
 {
 	Type *p = prune(tp);
+	if(ctx->error)
+		return ctx->error;
 	switch(p->type) {
 	case VARIABLE: {
 		if(is_generic(p, ngs))
@@ -100,6 +101,8 @@ static Type *
 fresh(Inferencer *ctx, Type *t, TypeList *ngs)
 {
 	TypeMap map[MAX_VARS];
+	if(ctx->error)
+		return ctx->error;
 	for(int i = 0; i < MAX_VARS - 1; ++i) {
 		map[i].next = &map[i + 1];
 	}
@@ -113,11 +116,13 @@ fresh(Inferencer *ctx, Type *t, TypeList *ngs)
 static Type *
 get_type(Inferencer *ctx, char *name, Env *env, TypeList *ngs)
 {
+	Env *cur = env;
 	long l = strtol(name, NULL, 0);
+	if(ctx->error)
+		return ctx->error;
 	if(l != 0 || (l == 0 && errno != EINVAL)) {
 		return Integer(ctx);
 	}
-	Env *cur = env;
 	while(cur != NULL) {
 		if(!strcmp(name, cur->name))
 			return fresh(ctx, cur->node, ngs);
@@ -131,6 +136,8 @@ unify(Inferencer *ctx, Type *t1, Type *t2)
 {
 	Type *a = prune(t1);
 	Type *b = prune(t2);
+	if(ctx->error)
+		return ctx->error;
 
 	switch(a->type) {
 	case VARIABLE:
@@ -151,10 +158,6 @@ unify(Inferencer *ctx, Type *t1, Type *t2)
 			return a;
 		}
 	default:
-		if(a->type < 0)
-			return a;
-		if(b->type < 0)
-			return b;
 		return Err(ctx, UNIFY_ERROR, NULL);
 	}
 }
@@ -162,39 +165,29 @@ unify(Inferencer *ctx, Type *t1, Type *t2)
 Type *
 analyze(Inferencer *ctx, Term *node, Env *env, TypeList *ngs)
 {
+	if(ctx->error)
+		return ctx->error;
 	switch(node->type) {
 	case IDENTIFIER:
 		return get_type(ctx, node->name, env, ngs);
 	case APPLY: {
 		Type *func = analyze(ctx, node->fn, env, ngs);
-		if(func->type < 0)
-			return func;
 		Type *arg = analyze(ctx, node->arg, env, ngs);
-		if(arg->type < 0)
-			return arg;
 		Type *res = Var(ctx);
-		if(res < 0)
-			return res;
 		(void)unify(ctx, Function(ctx, arg, res), func);
 		return res;
 	}
 	case LAMBDA: {
 		Type *arg = Var(ctx);
-		if(arg->type < 0)
-			return arg;
 		Env new_env = {.name = node->v,
 			       .node = arg,
 			       .next = env};
 		TypeList new_ngs = {.val = arg, .next = ngs};
 		Type *res = analyze(ctx, node->body, &new_env, &new_ngs);
-		if(res->type < 0)
-			return res;
 		return Function(ctx, arg, res);
 	}
 	case LET: {
 		Type *defn = analyze(ctx, node->defn, env, ngs);
-		if(defn->type < 0)
-			return defn;
 		Env new_env = {.name = node->v,
 			       .node = defn,
 			       .next = env};
@@ -202,15 +195,11 @@ analyze(Inferencer *ctx, Term *node, Env *env, TypeList *ngs)
 	}
 	case LETREC: {
 		Type *new = Var(ctx);
-		if(new->type < 0)
-			return new;
 		Env new_env = {.name = node->v,
 			       .node = new,
 			       .next = env};
 		TypeList new_ng = {.val = new, .next = ngs};
 		Type *defn = analyze(ctx, node->defn, &new_env, &new_ng);
-		if(defn->type < 0)
-			return defn;
 		(void)unify(ctx, new, defn);
 		return analyze(ctx, node->body, &new_env, ngs);
 	}

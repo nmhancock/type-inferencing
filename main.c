@@ -4,7 +4,6 @@
 #include <time.h>
 
 #include "inference.h"
-#include "context.h"
 
 #define MAX_TYPES 200
 int

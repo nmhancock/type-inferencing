@@ -63,7 +63,20 @@ typedef struct Env {
 	Type *node;
 	struct Env *next;
 } Env;
-typedef struct Inferencer Inferencer;
+typedef struct Inferencer {
+	Type *error;
+	int use;
+	int cap;
+	Type *types;
+} Inferencer;
 Type *analyze(Inferencer *, Term *, Env *, TypeList *);
+
+Inferencer make_ctx(Type *, int); /* TODO: Fix return type to be int */
+Type *make_type(Inferencer *);
+Type *Function(Inferencer *, Type *, Type *);
+Type *Var(Inferencer *);
+Type *Err(Inferencer *, type_t, char *);
+Type *Integer(Inferencer *);
+Type *Bool(Inferencer *);
 
 void print(Term *, Type *);
