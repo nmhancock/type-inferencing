@@ -5,86 +5,84 @@
 
 static char *function_name = "->";
 
-struct inferencing_ctx
-make_ctx(struct type *types, int max_types)
+Inferencer
+make_ctx(Type *types, int max_types)
 {
-	struct inferencing_ctx ctx = {.types = types,
-				      .current_type = 0,
-				      .max_types = max_types};
-	struct type *cur = &ctx.types[ctx.current_type];
+	Inferencer ctx = {.types = types,
+			  .current_type = 0,
+			  .max_types = max_types};
+	Type *cur = &ctx.types[ctx.current_type];
 	/* Preallocate errors to avoid that failure case. */
 	if(max_types < 10) {
 		ctx.current_type = ctx.max_types = -1;
 		return ctx;
 	}
-	*cur++ = (struct type){.type = OUT_OF_TYPES,
-			       .undefined_symbol = NULL};
-	*cur++ = (struct type){.type = LOCAL_SCOPE_EXCEEDED,
-			       .undefined_symbol = NULL};
-	*cur++ = (struct type){.type = UNIFY_ERROR,
-			       .undefined_symbol = NULL};
-	*cur++ = (struct type){.type = TYPE_MISMATCH,
-			       .undefined_symbol = NULL};
-	*cur++ = (struct type){.type = RECURSIVE_UNIFICATION,
-			       .undefined_symbol = NULL};
-	*cur++ = (struct type){.type = UNDEFINED_SYMBOL,
-			       .undefined_symbol = NULL};
-	*cur++ = (struct type){.type = UNHANDLED_SYNTAX_NODE,
-			       .undefined_symbol = NULL};
+	*cur++ = (Type){.type = OUT_OF_TYPES,
+			.undefined_symbol = NULL};
+	*cur++ = (Type){.type = LOCAL_SCOPE_EXCEEDED,
+			.undefined_symbol = NULL};
+	*cur++ = (Type){.type = UNIFY_ERROR,
+			.undefined_symbol = NULL};
+	*cur++ = (Type){.type = TYPE_MISMATCH,
+			.undefined_symbol = NULL};
+	*cur++ = (Type){.type = RECURSIVE_UNIFICATION,
+			.undefined_symbol = NULL};
+	*cur++ = (Type){.type = UNDEFINED_SYMBOL,
+			.undefined_symbol = NULL};
+	*cur++ = (Type){.type = UNHANDLED_SYNTAX_NODE,
+			.undefined_symbol = NULL};
 	/* Basic types are constructed with a nullary type constructor */
-	*cur++ = (struct type){
+	*cur++ = (Type){
 		.type = OPERATOR, .op_name = "int", .types = {NULL}, .args = 0};
-	*cur++ = (struct type){.type = OPERATOR,
-			       .op_name = "bool",
-			       .types = {NULL},
-			       .args = 0};
+	*cur++ = (Type){.type = OPERATOR,
+			.op_name = "bool",
+			.types = {NULL},
+			.args = 0};
 	ctx.current_type = 8;
 	return ctx;
 }
-struct type *
-make_type(struct inferencing_ctx *ctx)
+Type *
+make_type(Inferencer *ctx)
 {
 	if(ctx->current_type == ctx->max_types)
 		return &ctx->types[0];
 	ctx->types[ctx->current_type].id = ctx->current_type;
 	return &ctx->types[ctx->current_type++];
 }
-struct type *
-Err(struct inferencing_ctx *ctx, enum type_type err,
-    char *symbol)
+Type *
+Err(Inferencer *ctx, type_t err, char *symbol)
 {
-	struct type *error = &ctx->types[(err < 0 ? err : -1) + 7];
+	Type *error = &ctx->types[(err < 0 ? err : -1) + 7];
 	error->undefined_symbol = symbol;
 	return error;
 }
-struct type *
-Integer(struct inferencing_ctx *ctx)
+Type *
+Integer(Inferencer *ctx)
 {
 	return &ctx->types[7];
 }
-struct type *
-Bool(struct inferencing_ctx *ctx)
+Type *
+Bool(Inferencer *ctx)
 {
 	return &ctx->types[8];
 }
-struct type *
-Var(struct inferencing_ctx *ctx)
+Type *
+Var(Inferencer *ctx)
 {
-	struct type *result_type = make_type(ctx);
-	*result_type = (struct type){
+	Type *result_type = make_type(ctx);
+	*result_type = (Type){
 		.type = VARIABLE,
 		.instance = NULL,
 		.var_name = NULL,
 	};
 	return result_type;
 }
-struct type *
-Function(struct inferencing_ctx *ctx, struct type *arg_t,
-	 struct type *res_t)
+Type *
+Function(Inferencer *ctx, Type *arg_t, Type *res_t)
 {
-	struct type *function = make_type(ctx);
+	Type *function = make_type(ctx);
 	/* Unrolling the constructor to keep the same form as the old code. */
-	*function = (struct type){
+	*function = (Type){
 		.type = OPERATOR,
 		.op_name = function_name,
 		.args = 2,

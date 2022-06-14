@@ -10,19 +10,19 @@
 int
 main(void)
 {
-	struct type types[MAX_TYPES];
-	struct inferencing_ctx ctx = make_ctx(types, MAX_TYPES);
+	Type types[MAX_TYPES];
+	Inferencer ctx = make_ctx(types, MAX_TYPES);
 
-	struct type *var1 = Var(&ctx);
-	struct type *var2 = Var(&ctx);
-	struct type *pair_type = make_type(&ctx);
-	*pair_type = (struct type){.type = OPERATOR,
-				   .op_name = "*",
-				   .args = 2,
-				   .types = {var1, var2}};
-	struct type *var3 = Var(&ctx);
+	Type *var1 = Var(&ctx);
+	Type *var2 = Var(&ctx);
+	Type *pair_type = make_type(&ctx);
+	*pair_type = (Type){.type = OPERATOR,
+			    .op_name = "*",
+			    .args = 2,
+			    .types = {var1, var2}};
+	Type *var3 = Var(&ctx);
 
-	struct env envs[7] = {
+	Env envs[7] = {
 		{.name = "pair",
 		 .node = Function(&ctx, var1, Function(&ctx, var2, pair_type)),
 		 .next = &envs[1]},
@@ -47,85 +47,34 @@ main(void)
 		{.name = "factorial",
 		 .node = Function(&ctx, Integer(&ctx), Integer(&ctx)),
 		 .next = NULL}};
-	struct env *my_env = envs;
+	Env *my_env = envs;
 
-	struct term factorial = {.type = LETREC,
-				     .v = "factorial",
-				     .defn =
-					     &(struct term){
-						     .type = LAMBDA,
-						     .v = "n",
-						     .body =
-							     &(struct term){
-								     .type = APPLY,
-								     .fn =
-									     &(
-										     struct term){.type = APPLY,
-												      .fn =
-													      &(struct term){.type = APPLY,
-																 .fn =
-																	 &(struct term){
-																		 .type = IDENTIFIER,
-																		 .name = "cond"},
-																 .arg =
-																	 &(struct term){
-																		 .type = APPLY,
-																		 .fn = &(struct
-																			 term){.type = IDENTIFIER,
-																				   .name = "zero"},
-																		 .arg = &(
-																			 struct
-																			 term){.type = IDENTIFIER, .name = "n"}}},
-												      .arg =
-													      &(struct term){
-														      .type = IDENTIFIER,
-														      .name = "1"}},
-								     .arg = &(struct term){.type = APPLY,
-											       .fn =
-												       &(struct term){
-													       .type = APPLY,
-													       .fn =
-														       &(struct
-															 term){.type = IDENTIFIER,
-																   .name = "times"},
-													       .arg =
-														       &(struct term){
-															       .type = IDENTIFIER,
-															       .name = "n"},
-												       },
-											       .arg = &(struct
-													term){.type = APPLY,
-														  .fn = &(struct term){.type = IDENTIFIER, .name = "factorial"},
-														  .arg =
-															  &(struct term){
-																  .type = APPLY,
-																  .fn =
-																	  &(struct
-																	    term){.type = IDENTIFIER,
-																		      .name = "pred"},
-																  .arg =
-																	  &(struct term){.type = IDENTIFIER,
-																			     .name = "n"},
-															  }}}},
-					     },
-				     .body = &(struct term){
-					     .type = APPLY,
-					     .fn =
-						     &(struct term){
-							     .type = IDENTIFIER,
-							     .name = "factorial"},
-					     .arg =
-						     &(struct term){
-							     .type = IDENTIFIER,
-							     .name = "5"},
-				     }};
+	Term factorial = {
+		.type = LETREC,
+		.v = "factorial",
+		.defn = &(Term){
+			.type = LAMBDA,
+			.v = "n",
+			.body = &(Term){
+				.type = APPLY,
+				.fn = &(Term){
+					.type = APPLY,
+					.fn = &(Term){
+						.type = APPLY,
+						.fn = &(Term){
+							.type = IDENTIFIER,
+							.name = "cond"},
+						.arg = &(Term){.type = APPLY, .fn = &(Term){.type = IDENTIFIER, .name = "zero"}, .arg = &(Term){.type = IDENTIFIER, .name = "n"}}},
+					.arg = &(Term){.type = IDENTIFIER, .name = "1"}},
+				.arg = &(Term){.type = APPLY, .fn = &(Term){.type = APPLY, .fn = &(Term){.type = IDENTIFIER, .name = "times"}, .arg = &(Term){.type = IDENTIFIER, .name = "n"}}, .arg = &(Term){.type = APPLY, .fn = &(Term){.type = IDENTIFIER, .name = "factorial"}, .arg = &(Term){.type = APPLY, .fn = &(Term){.type = IDENTIFIER, .name = "pred"}, .arg = &(Term){.type = IDENTIFIER, .name = "n"}}}}}},
+		.body = &(Term){.type = APPLY, .fn = &(Term){.type = IDENTIFIER, .name = "factorial"}, .arg = &(Term){.type = IDENTIFIER, .name = "5"}}};
 
-	struct type *t = NULL;
+	Type *t = NULL;
 	printf("ctx.current_type: %d\n", ctx.current_type);
 	clock_t total = 0;
 #define ITERATIONS 1000000
 	for(int i = 0; i < ITERATIONS; ++i) {
-		ctx.current_type = 22; /* Experimentally detypeined */
+		ctx.current_type = 22; /* Experimentally determined */
 		clock_t tic = clock();
 		t = analyze(&ctx, &factorial, my_env, NULL);
 		clock_t toc = clock();

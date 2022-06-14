@@ -4,7 +4,7 @@
 #include "inference.h"
 
 static char *
-print_a_type(struct type *t)
+print_a_type(Type *t)
 {
 	char *ret;
 	if(!t) {
@@ -58,7 +58,7 @@ print_a_type(struct type *t)
 }
 
 static void
-print_type(struct type *t)
+print_type(Type *t)
 {
 	char *res = print_a_type(t);
 	if(!res)
@@ -69,7 +69,7 @@ print_type(struct type *t)
 }
 
 static char *
-print_term(struct term *n)
+print_term(Term *n)
 {
 	char *ret;
 	if(!n) {
@@ -118,7 +118,7 @@ print_term(struct term *n)
 }
 
 static void
-print_ast(struct term *n)
+print_ast(Term *n)
 {
 	char *res = print_term(n);
 	if(!res)
@@ -129,7 +129,7 @@ print_ast(struct term *n)
 }
 
 void
-print(struct term *n, struct type *t)
+print(Term *n, Type *t)
 {
 	char *ast = print_term(n);
 	char *type = print_a_type(t);
