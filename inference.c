@@ -138,29 +138,28 @@ unify(Inferencer *ctx, Type *t1, Type *t2)
 	Type *b = prune(t2);
 	if(ctx->error)
 		return;
+	if(a->type == OPERATOR && b->type == VARIABLE) { /* Normalize */
+		Type* swp = a;
+		a = b;
+		b = swp;
+	}
 	switch(a->type) {
 	case VARIABLE:
 		if(a == b)
 			return;
-		if(!occurs_in_type(a, b))
+		else if(!occurs_in_type(a, b))
 			a->instance = b;
 		else
 			Err(ctx, RECURSIVE_UNIFICATION, NULL);
-		a->instance = b;
 		break;
 	case OPERATOR:
-		if(b->type == VARIABLE)
-			unify(ctx, b, a);
-		else if(b->type == OPERATOR) {
-			if(strcmp(a->op_name, b->op_name) || a->args != b->args)
-				Err(ctx, TYPE_MISMATCH, NULL);
-			else
-				for(int i = 0; i < a->args; ++i)
-					unify(ctx, a->types[i], b->types[i]);
-		} else /* WONTREACH */
-			Err(ctx, UNIFY_ERROR, NULL);
+		if(strcmp(a->op_name, b->op_name) || a->args != b->args)
+			Err(ctx, TYPE_MISMATCH, NULL);
+		else
+			for(int i = 0; i < a->args; ++i)
+				unify(ctx, a->types[i], b->types[i]);
 		break;
-	default:
+	default: /* WONTREACH based on line 139 above */
 		Err(ctx, UNIFY_ERROR, NULL);
 		break;
 	}
