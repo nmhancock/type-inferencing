@@ -16,13 +16,13 @@ typedef enum {
 } type_t;
 typedef struct Type {
 	union {
-                struct Type *instance;
+		struct Type *instance;
 		struct {
 			struct Type *types[MAX_ARGS];
 			int args;
 		};
 	};
-        char *name;
+	char *name;
 	int id;
 	type_t type;
 } Type;

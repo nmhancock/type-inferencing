@@ -77,7 +77,8 @@ freshrec(Inferencer *ctx, Type *tp, TypeList *ngs, TypeMap *map)
 	case VARIABLE: {
 		if(is_generic(p, ngs))
 			return find_or_add(ctx, map, p);
-		return p;
+		else
+			return p;
 	}
 	case OPERATOR: {
 		Type *ret = make_type(ctx);
@@ -89,11 +90,8 @@ freshrec(Inferencer *ctx, Type *tp, TypeList *ngs, TypeMap *map)
 		}
 		return ret;
 	}
-	default:
-		return Err(ctx, UNIFY_ERROR, NULL);
 	}
 }
-
 static Type *
 fresh(Inferencer *ctx, Type *t, TypeList *ngs)
 {
@@ -155,9 +153,6 @@ unify(Inferencer *ctx, Type *t1, Type *t2)
 		else
 			for(int i = 0; i < a->args; ++i)
 				unify(ctx, a->types[i], b->types[i]);
-		break;
-	default: /* WONTREACH based on line 139 above */
-		Err(ctx, UNIFY_ERROR, NULL);
 		break;
 	}
 	return;
