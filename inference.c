@@ -82,7 +82,7 @@ freshrec(Inferencer *ctx, Type *tp, TypeList *ngs, TypeMap *map)
 	case OPERATOR: {
 		Type *ret = make_type(ctx);
 		*ret = (Type){.type = OPERATOR,
-			      .op_name = p->op_name,
+			      .name = p->name,
 			      .args = p->args};
 		for(int i = 0; i < ret->args; ++i) {
 			ret->types[i] = freshrec(ctx, p->types[i], ngs, map);
@@ -150,7 +150,7 @@ unify(Inferencer *ctx, Type *t1, Type *t2)
 			Err(ctx, RECURSIVE_UNIFICATION, NULL);
 		break;
 	case OPERATOR:
-		if(strcmp(a->op_name, b->op_name) || a->args != b->args)
+		if(strcmp(a->name, b->name) || a->args != b->args)
 			Err(ctx, TYPE_MISMATCH, NULL);
 		else
 			for(int i = 0; i < a->args; ++i)

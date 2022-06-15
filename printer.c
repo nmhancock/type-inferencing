@@ -14,7 +14,7 @@ print_a_type(Type *t)
 	switch(t->type) {
 	case VARIABLE:
 		if(!t->instance) {
-			asprintf(&ret, "%s (%d)", t->var_name, t->id);
+			asprintf(&ret, "%s (%d)", t->name, t->id);
 			return ret;
 		}
 		char *instance = print_a_type(t->instance);
@@ -25,16 +25,16 @@ print_a_type(Type *t)
 	case OPERATOR:
 		/* Ensure caller can free as expected */
 		if(t->args == 0)
-			asprintf(&ret, "%s", t->op_name);
+			asprintf(&ret, "%s", t->name);
 		else if(t->args == 2) {
 			char *type0 = print_a_type(t->types[0]);
 			char *type1 = print_a_type(t->types[1]);
 			asprintf(&ret, "(%s %s %s)", type0 ? type0 : "NULL",
-				 t->op_name, type1 ? type1 : "NULL");
+				 t->name, type1 ? type1 : "NULL");
 			free(type0);
 			free(type1);
 		} else /* TODO: Implement properly, don't be lazy! */
-			asprintf(&ret, "%s", t->op_name);
+			asprintf(&ret, "%s", t->name);
 		return ret;
 	default:
 		asprintf(&ret, "Unexpected Type: %d", t->type);

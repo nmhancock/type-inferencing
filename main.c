@@ -16,7 +16,7 @@ main(void)
 	Type *var2 = Var(&ctx);
 	Type *pair_type = make_type(&ctx);
 	*pair_type = (Type){.type = OPERATOR,
-			    .op_name = "*",
+			    .name = "*",
 			    .args = 2,
 			    .types = {var1, var2}};
 	Type *var3 = Var(&ctx);

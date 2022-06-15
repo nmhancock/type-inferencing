@@ -48,7 +48,7 @@ Var(Inferencer *ctx)
 		*var = (Type){
 			.type = VARIABLE,
 			.instance = NULL,
-			.var_name = NULL,
+			.name = NULL,
 		};
 	return var;
 }
@@ -60,7 +60,7 @@ Function(Inferencer *ctx, Type *arg_t, Type *res_t)
 	if(function)
 		*function = (Type){
 			.type = OPERATOR,
-			.op_name = function_name,
+			.name = function_name,
 			.args = 2,
 			.types = {arg_t, res_t},
 		};
@@ -80,11 +80,11 @@ make_ctx(Type *types, int max_types)
 	}
 	/* Basic types are constructed with a nullary type constructor */
 	ctx.types[ctx.use++] = (Type){.type = OPERATOR,
-				      .op_name = "int",
+				      .name = "int",
 				      .types = {NULL},
 				      .args = 0};
 	ctx.types[ctx.use++] = (Type){.type = OPERATOR,
-				      .op_name = "bool",
+				      .name = "bool",
 				      .types = {NULL},
 				      .args = 0};
 	return ctx;

@@ -12,20 +12,17 @@ typedef enum {
 } error_t;
 typedef enum {
 	VARIABLE = 0,
-	OPERATOR = 2,
+	OPERATOR = 1,
 } type_t;
 typedef struct Type {
 	union {
+                struct Type *instance;
 		struct {
-			struct Type *instance;
-			char *var_name;
-		};
-		struct {
-			char *op_name;
 			struct Type *types[MAX_ARGS];
 			int args;
 		};
 	};
+        char *name;
 	int id;
 	type_t type;
 } Type;
