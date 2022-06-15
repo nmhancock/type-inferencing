@@ -39,16 +39,42 @@ prune(Type *t)
 		t = t->instance;
 	return t;
 }
+#include <assert.h> /* Debugging */
+#define MAX_CHECK 20
 static int
 occurs_in_type(Type *v, Type *type2)
 {
+	size_t cmp_use = 0;
+	size_t cmp_cap = MAX_CHECK;
+	struct Type* cmp_types[MAX_CHECK] = {0};
+	size_t parent_use = 0;
+	size_t parent_cap = MAX_CHECK;
+	struct Type* parent_types[MAX_CHECK] = {0};
 	Type *pruned_type2 = prune(type2);
-	if(pruned_type2 == v)
-		return 1;
-	if(pruned_type2->type == OPERATOR)
-		for(int i = 0; i < pruned_type2->args; ++i)
-			if(occurs_in_type(v, pruned_type2->types[i]))
-				return 1;
+	if (pruned_type2->type == OPERATOR) {
+		parent_types[parent_use++] = pruned_type2;
+		assert(parent_use < parent_cap);
+	} else {
+		cmp_types[cmp_use++] = pruned_type2;
+		assert(cmp_use < cmp_cap);
+	}
+	while(parent_use > 0) {
+		Type *cur = prune(parent_types[parent_use-- - 1]);
+		for(int i = 0; i < cur->args; ++i) {
+			if(cur->types[i]->type == OPERATOR) {
+				parent_types[parent_use++] = cur->types[i];
+				assert(parent_use < parent_cap);
+			} else {
+				cmp_types[cmp_use++] = cur->types[i];
+				assert(cmp_use < cmp_cap);
+			}
+		}
+		cmp_types[cmp_use++] = cur;
+		assert(cmp_use < cmp_cap);
+	}
+	while(cmp_use > 0)
+		if(prune(cmp_types[cmp_use-- - 1]) == v)
+			return 1;
 	return 0;
 }
 static int
@@ -81,9 +107,8 @@ freshrec(Inferencer *ctx, Type *tp, TypeList *ngs, TypeMap *map)
 		*ret = (Type){.type = OPERATOR,
 			      .name = p->name,
 			      .args = p->args};
-		for(int i = 0; i < ret->args; ++i) {
+		for(int i = 0; i < ret->args; ++i)
 			ret->types[i] = freshrec(ctx, p->types[i], ngs, map);
-		}
 		return ret;
 	}
 	}
