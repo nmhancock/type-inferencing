@@ -131,35 +131,40 @@ get_type(Inferencer *ctx, char *name, Env *env, TypeList *ngs)
 	return Err(ctx, UNDEFINED_SYMBOL, name);
 }
 
-static Type *
+static void
 unify(Inferencer *ctx, Type *t1, Type *t2)
 {
 	Type *a = prune(t1);
 	Type *b = prune(t2);
 	if(ctx->error)
-		return ctx->error;
-
+		return;
 	switch(a->type) {
 	case VARIABLE:
 		if(a == b)
-			return a;
-		if(occurs_in_type(a, b))
-			return Err(ctx, RECURSIVE_UNIFICATION, NULL);
+			return;
+		if(!occurs_in_type(a, b))
+			a->instance = b;
+		else
+			Err(ctx, RECURSIVE_UNIFICATION, NULL);
 		a->instance = b;
-		return a;
+		break;
 	case OPERATOR:
 		if(b->type == VARIABLE)
-			return unify(ctx, b, a);
-		if(b->type == OPERATOR) {
+			unify(ctx, b, a);
+		else if(b->type == OPERATOR) {
 			if(strcmp(a->op_name, b->op_name) || a->args != b->args)
 				Err(ctx, TYPE_MISMATCH, NULL);
-			for(int i = 0; i < a->args; ++i)
-				(void)unify(ctx, a->types[i], b->types[i]);
-			return a;
-		}
+			else
+				for(int i = 0; i < a->args; ++i)
+					unify(ctx, a->types[i], b->types[i]);
+		} else /* WONTREACH */
+			Err(ctx, UNIFY_ERROR, NULL);
+		break;
 	default:
-		return Err(ctx, UNIFY_ERROR, NULL);
+		Err(ctx, UNIFY_ERROR, NULL);
+		break;
 	}
+	return;
 }
 
 Type *
@@ -174,7 +179,7 @@ analyze(Inferencer *ctx, Term *node, Env *env, TypeList *ngs)
 		Type *func = analyze(ctx, node->fn, env, ngs);
 		Type *arg = analyze(ctx, node->arg, env, ngs);
 		Type *res = Var(ctx);
-		(void)unify(ctx, Function(ctx, arg, res), func);
+		unify(ctx, Function(ctx, arg, res), func);
 		return res;
 	}
 	case LAMBDA: {
@@ -200,7 +205,7 @@ analyze(Inferencer *ctx, Term *node, Env *env, TypeList *ngs)
 			       .next = env};
 		TypeList new_ng = {.val = new, .next = ngs};
 		Type *defn = analyze(ctx, node->defn, &new_env, &new_ng);
-		(void)unify(ctx, new, defn);
+		unify(ctx, new, defn);
 		return analyze(ctx, node->body, &new_env, ngs);
 	}
 	default:
