@@ -14,12 +14,9 @@ typedef struct TypeList {
 static Type *
 prune(Type *t)
 {
-	if(t->type != VARIABLE)
-		return t;
-	if(t->instance == NULL)
-		return t;
-	t->instance = prune(t->instance);
-	return t->instance;
+	if(t && t->type == VARIABLE && t->instance)
+		t = prune(t->instance);
+	return t;
 }
 
 static int
@@ -75,7 +72,7 @@ freshrec(Inferencer *ctx, Type *tp, TypeList *ngs, TypeMap *map)
 {
 	Type *p = prune(tp);
 	if(ctx->error)
-		return ctx->error;
+		return NULL;
 	switch(p->type) {
 	case VARIABLE: {
 		if(is_generic(p, ngs))
@@ -102,7 +99,7 @@ fresh(Inferencer *ctx, Type *t, TypeList *ngs)
 {
 	TypeMap map[MAX_VARS];
 	if(ctx->error)
-		return ctx->error;
+		return NULL;
 	for(int i = 0; i < MAX_VARS - 1; ++i) {
 		map[i].next = &map[i + 1];
 	}
@@ -119,7 +116,7 @@ get_type(Inferencer *ctx, char *name, Env *env, TypeList *ngs)
 	Env *cur = env;
 	long l = strtol(name, NULL, 0);
 	if(ctx->error)
-		return ctx->error;
+		return NULL;
 	if(l != 0 || (l == 0 && errno != EINVAL)) {
 		return Integer(ctx);
 	}
@@ -136,10 +133,10 @@ unify(Inferencer *ctx, Type *t1, Type *t2)
 {
 	Type *a = prune(t1);
 	Type *b = prune(t2);
-	if(ctx->error)
+	if(ctx->error) /* Neither a nor b are NULL subsequently */
 		return;
 	if(a->type == OPERATOR && b->type == VARIABLE) { /* Normalize */
-		Type* swp = a;
+		Type *swp = a;
 		a = b;
 		b = swp;
 	}
@@ -166,11 +163,11 @@ unify(Inferencer *ctx, Type *t1, Type *t2)
 	return;
 }
 
-Type *
+static Type *
 analyze(Inferencer *ctx, Term *node, Env *env, TypeList *ngs)
 {
 	if(ctx->error)
-		return ctx->error;
+		return NULL;
 	switch(node->type) {
 	case IDENTIFIER:
 		return get_type(ctx, node->name, env, ngs);
@@ -210,4 +207,14 @@ analyze(Inferencer *ctx, Term *node, Env *env, TypeList *ngs)
 	default:
 		return Err(ctx, UNHANDLED_SYNTAX_NODE, NULL);
 	}
+}
+
+error_t
+extern_analyze(Inferencer *ctx, Term *node, Env *env, TypeList *ngs)
+{
+	ctx->result = analyze(ctx, node, env, ngs);
+	if(ctx->error)
+		return ctx->error;
+	else
+		return OK;
 }

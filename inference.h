@@ -1,9 +1,7 @@
 #define MAX_ARGS 2
 
 typedef enum {
-	VARIABLE = 0,
-	FUNCTION = 1,
-	OPERATOR = 2,
+	OK = 0,
 	UNHANDLED_SYNTAX_NODE = -1,
 	UNDEFINED_SYMBOL = -2,
 	RECURSIVE_UNIFICATION = -3,
@@ -11,6 +9,11 @@ typedef enum {
 	UNIFY_ERROR = -5,
 	LOCAL_SCOPE_EXCEEDED = -6,
 	OUT_OF_TYPES = -7,
+} error_t;
+typedef enum {
+	VARIABLE = 0,
+	FUNCTION = 1,
+	OPERATOR = 2,
 } type_t;
 typedef struct Type {
 	union {
@@ -27,7 +30,6 @@ typedef struct Type {
 			struct Type *types[MAX_ARGS];
 			int args;
 		};
-		char *undefined_symbol;
 	};
 	int id;
 	type_t type;
@@ -64,12 +66,15 @@ typedef struct Env {
 	struct Env *next;
 } Env;
 typedef struct Inferencer {
-	Type *error;
+	Type *types;
+	Type *result;
+	char *error_msg;
+	error_t error;
 	int use;
 	int cap;
-	Type *types;
 } Inferencer;
-Type *analyze(Inferencer *, Term *, Env *, TypeList *);
+error_t extern_analyze(Inferencer *ctx, Term *node, Env *env, TypeList *ngs);
+Type *get_result(Inferencer *ctx);
 
 Inferencer make_ctx(Type *, int); /* TODO: Fix return type to be int */
 Type *make_type(Inferencer *);
@@ -80,3 +85,4 @@ Type *Integer(Inferencer *);
 Type *Bool(Inferencer *);
 
 void print(Term *, Type *);
+void print_error(Term *, error_t, char *);

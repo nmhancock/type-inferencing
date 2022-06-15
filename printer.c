@@ -36,39 +36,43 @@ print_a_type(Type *t)
 		} else /* TODO: Implement properly, don't be lazy! */
 			asprintf(&ret, "%s", t->op_name);
 		return ret;
-	case UNHANDLED_SYNTAX_NODE:
-		asprintf(&ret, "Unhandled syntax node");
-		return ret;
-	case UNDEFINED_SYMBOL:
-		asprintf(&ret, "Undefined symbol %s\n", t->undefined_symbol);
-		return ret;
-	case RECURSIVE_UNIFICATION:
-		asprintf(&ret, "Recursive unification");
-		return ret;
-	case TYPE_MISMATCH:
-		asprintf(&ret, "Type mismatch");
-		return ret;
-	case UNIFY_ERROR:
-		asprintf(&ret, "Unification error");
-		return ret;
-	case OUT_OF_TYPES:
-		asprintf(&ret, "Out of types!");
-		return ret;
 	default:
 		asprintf(&ret, "Unexpected Type: %d", t->type);
 		return ret;
 	}
 }
 
-static void
-print_type(Type *t)
+static char *
+print_an_error(error_t e, char *symbol)
 {
-	char *res = print_a_type(t);
-	if(!res)
-		printf("NULL\n");
-	else
-		printf("%s\n", res);
-	free(res);
+	char *ret;
+	switch(e) {
+	case OK:
+		asprintf(&ret, "No error");
+		break;
+	case UNHANDLED_SYNTAX_NODE:
+		asprintf(&ret, "Unhandled syntax node");
+		break;
+	case UNDEFINED_SYMBOL:
+		asprintf(&ret, "Undefined symbol %s\n", symbol);
+		break;
+	case RECURSIVE_UNIFICATION:
+		asprintf(&ret, "Recursive unification");
+		break;
+	case TYPE_MISMATCH:
+		asprintf(&ret, "Type mismatch");
+		break;
+	case UNIFY_ERROR:
+		asprintf(&ret, "Unification error");
+		break;
+	case OUT_OF_TYPES:
+		asprintf(&ret, "Out of types!");
+		break;
+	case LOCAL_SCOPE_EXCEEDED:
+		asprintf(&ret, "Too many variables in local scope");
+		break;
+	}
+	return ret;
 }
 
 static char *
@@ -120,23 +124,22 @@ print_term(Term *n)
 	return ret;
 }
 
-static void
-print_ast(Term *n)
-{
-	char *res = print_term(n);
-	if(!res)
-		printf("NULL\n");
-	else
-		printf("%s\n", res);
-	free(res);
-}
-
 void
 print(Term *n, Type *t)
 {
 	char *ast = print_term(n);
 	char *type = print_a_type(t);
-	printf("%s : %s\n", ast, type);
+	printf("%s : %s\n", ast ? ast : "NULL", type ? type : "NULL");
 	free(type);
+	free(ast);
+}
+
+void
+print_error(Term *n, error_t e, char *symbol)
+{
+	char *ast = print_term(n);
+	char *err = print_an_error(e, symbol);
+	printf("%s : %s\n", ast ? ast : "NULL", err ? err : "NULL");
+	free(err);
 	free(ast);
 }

@@ -75,10 +75,17 @@ main(void)
 	for(int i = 0; i < ITERATIONS; ++i) {
 		ctx.use = 22; /* Experimentally determined */
 		clock_t tic = clock();
-		t = analyze(&ctx, &factorial, my_env, NULL);
+		(void)extern_analyze(&ctx, &factorial, my_env, NULL);
 		clock_t toc = clock();
 		total += toc - tic;
+		if(ctx.error)
+			break;
 	}
+	if(ctx.error) {
+		print_error(&factorial, ctx.error, ctx.error_msg);
+		return 1;
+	}
+	t = get_result(&ctx);
 	fprintf(stdout, "Iterations: %d Total time: %f ns\n", ITERATIONS,
 		(double)(total / CLOCKS_PER_SEC * 1000000));
 	print(&factorial, t);
