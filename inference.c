@@ -10,46 +10,11 @@ typedef struct TypeList {
 	Type *val;
 	struct TypeList *next;
 } TypeList;
-
-static Type *
-prune(Type *t)
-{
-	if(t && t->type == VARIABLE && t->instance)
-		t = prune(t->instance);
-	return t;
-}
-
-static int
-occurs_in_type(Type *v, Type *type2)
-{
-	Type *pruned_type2 = prune(type2);
-	if(pruned_type2 == v)
-		return 1;
-	if(pruned_type2->type == OPERATOR)
-		for(int i = 0; i < pruned_type2->args; ++i)
-			if(occurs_in_type(v, pruned_type2->types[i]))
-				return 1;
-	return 0;
-}
-
-static int
-is_generic(Type *v, TypeList *ngs)
-{
-	/* Flip the return value because we're checking ngss for a generic */
-	while(ngs != NULL) {
-		if(occurs_in_type(v, ngs->val))
-			return 0;
-		ngs = ngs->next;
-	}
-	return 1;
-}
-
-typedef struct _mp_item {
+typedef struct TypeMap {
 	Type *from;
 	Type *to;
-	struct _mp_item *next;
+	struct TypeMap *next;
 } TypeMap;
-
 static Type *
 find_or_add(Inferencer *ctx, TypeMap *map, Type *p)
 {
@@ -65,6 +30,37 @@ find_or_add(Inferencer *ctx, TypeMap *map, Type *p)
 	cur->from = p;
 	cur->to = Var(ctx);
 	return cur->to;
+}
+
+static Type *
+prune(Type *t)
+{
+	while(t && t->type == VARIABLE && t->instance)
+		t = t->instance;
+	return t;
+}
+static int
+occurs_in_type(Type *v, Type *type2)
+{
+	Type *pruned_type2 = prune(type2);
+	if(pruned_type2 == v)
+		return 1;
+	if(pruned_type2->type == OPERATOR)
+		for(int i = 0; i < pruned_type2->args; ++i)
+			if(occurs_in_type(v, pruned_type2->types[i]))
+				return 1;
+	return 0;
+}
+static int
+is_generic(Type *v, TypeList *ngs)
+{
+	/* Flip the return value because we're checking ngss for a generic */
+	while(ngs != NULL) {
+		if(occurs_in_type(v, ngs->val))
+			return 0;
+		ngs = ngs->next;
+	}
+	return 1;
 }
 
 static Type *
@@ -107,7 +103,6 @@ fresh(Inferencer *ctx, Type *t, TypeList *ngs)
 	}
 	return freshrec(ctx, t, ngs, map);
 }
-
 static Type *
 get_type(Inferencer *ctx, char *name, Env *env, TypeList *ngs)
 {
@@ -125,7 +120,6 @@ get_type(Inferencer *ctx, char *name, Env *env, TypeList *ngs)
 	}
 	return Err(ctx, UNDEFINED_SYMBOL, name);
 }
-
 static void
 unify(Inferencer *ctx, Type *t1, Type *t2)
 {
@@ -157,7 +151,6 @@ unify(Inferencer *ctx, Type *t1, Type *t2)
 	}
 	return;
 }
-
 static Type *
 analyze(Inferencer *ctx, Term *node, Env *env, TypeList *ngs)
 {
@@ -203,7 +196,6 @@ analyze(Inferencer *ctx, Term *node, Env *env, TypeList *ngs)
 		return Err(ctx, UNHANDLED_SYNTAX_NODE, NULL);
 	}
 }
-
 error_t
 extern_analyze(Inferencer *ctx, Term *node, Env *env, TypeList *ngs)
 {
