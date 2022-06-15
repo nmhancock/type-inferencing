@@ -12,7 +12,6 @@ typedef enum {
 } error_t;
 typedef enum {
 	VARIABLE = 0,
-	FUNCTION = 1,
 	OPERATOR = 2,
 } type_t;
 typedef struct Type {
@@ -20,10 +19,6 @@ typedef struct Type {
 		struct {
 			struct Type *instance;
 			char *var_name;
-		};
-		struct {
-			struct Type *from_type;
-			struct Type *to_type;
 		};
 		struct {
 			char *op_name;
