@@ -9,6 +9,7 @@ typedef enum {
 	UNIFY_ERROR = -5,
 	LOCAL_SCOPE_EXCEEDED = -6,
 	OUT_OF_TYPES = -7,
+        MAX_RECURSION_EXCEEDED = -8,
 } error_t;
 typedef enum {
 	VARIABLE = 0,
@@ -78,3 +79,4 @@ Type *Bool(Inferencer *);
 
 void print(Term *, Type *);
 void print_error(Term *, error_t, char *);
+size_t left_depth_first(Term **terms, size_t tcap, Term *root);

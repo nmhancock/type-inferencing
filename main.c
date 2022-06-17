@@ -3,7 +3,35 @@
 #include <stdlib.h>
 #include <time.h>
 
+#include <stddef.h>
 #include "inference.h"
+
+static void
+print_term(Term *t)
+{
+	if(!t) {
+		printf("NULL\n");
+		return;
+	}
+	switch(t->type) {
+	case IDENTIFIER:
+		printf("%d | %s\n", t->type, t->name ? t->name : NULL);
+		break;
+	case APPLY:
+		printf("%d | apply\n", t->type);
+		break;
+	case LAMBDA:
+		printf("%d | fn %s\n", t->type, t->v ? t->v : NULL);
+		break;
+	case LET:
+		printf("%d | let %s\n", t->type, t->v ? t->v : NULL);
+		break;
+	case LETREC:
+		printf("%d | letrec %s\n", t->type, t->v ? t->v : NULL);
+		break;
+	}
+	return;
+}
 
 #define MAX_TYPES 200
 int
@@ -62,18 +90,77 @@ main(void)
 						.type = APPLY,
 						.fn = &(Term){
 							.type = IDENTIFIER,
-							.name = "cond"},
-						.arg = &(Term){.type = APPLY, .fn = &(Term){.type = IDENTIFIER, .name = "zero"}, .arg = &(Term){.type = IDENTIFIER, .name = "n"}}},
-					.arg = &(Term){.type = IDENTIFIER, .name = "1"}},
-				.arg = &(Term){.type = APPLY, .fn = &(Term){.type = APPLY, .fn = &(Term){.type = IDENTIFIER, .name = "times"}, .arg = &(Term){.type = IDENTIFIER, .name = "n"}}, .arg = &(Term){.type = APPLY, .fn = &(Term){.type = IDENTIFIER, .name = "factorial"}, .arg = &(Term){.type = APPLY, .fn = &(Term){.type = IDENTIFIER, .name = "pred"}, .arg = &(Term){.type = IDENTIFIER, .name = "n"}}}}}},
-		.body = &(Term){.type = APPLY, .fn = &(Term){.type = IDENTIFIER, .name = "factorial"}, .arg = &(Term){.type = IDENTIFIER, .name = "5"}}};
-
+							.name = "cond"
+						},
+						.arg = &(Term){
+							.type = APPLY,
+							.fn = &(Term){
+								.type = IDENTIFIER,
+								.name = "zero"
+							},
+							.arg = &(Term){
+								.type = IDENTIFIER,
+								.name = "n"
+							}
+						}
+					},
+					.arg = &(Term){
+						.type = IDENTIFIER,
+						.name = "1"
+					}
+				},
+				.arg = &(Term){
+					.type = APPLY,
+					.fn = &(Term){
+						.type = APPLY,
+						.fn = &(Term){
+							.type = IDENTIFIER,
+							.name = "times"
+						},
+						.arg = &(Term){
+							.type = IDENTIFIER,
+							.name = "n"
+						}
+					},
+					.arg = &(Term){
+						.type = APPLY,
+						.fn = &(Term){
+							.type = IDENTIFIER,
+							.name = "factorial"
+						},
+						.arg = &(Term){
+							.type = APPLY,
+							.fn = &(Term){
+								.type = IDENTIFIER,
+								.name = "pred"
+							},
+							.arg = &(Term){
+								.type = IDENTIFIER,
+								.name = "n"
+							}
+						}
+					}
+				}
+			}
+		},
+		.body = &(Term){
+			.type = APPLY,
+			.fn = &(Term){
+				.type = IDENTIFIER,
+				.name = "factorial"
+			},
+			.arg = &(Term){
+				.type = IDENTIFIER,
+				.name = "5"
+			}
+		}
+	};
 	Type *t = NULL;
 	printf("ctx.use: %d\n", ctx.use);
 	clock_t total = 0;
-#define ITERATIONS 1000000
+#define ITERATIONS 1
 	for(int i = 0; i < ITERATIONS; ++i) {
-		ctx.use = 22; /* Experimentally determined */
+		ctx.use = 16; /* Experimentally determined */
 		clock_t tic = clock();
 		(void)extern_analyze(&ctx, &factorial, my_env, NULL);
 		clock_t toc = clock();
@@ -90,5 +177,11 @@ main(void)
 		(double)(total / CLOCKS_PER_SEC * 1000000));
 	print(&factorial, t);
 	printf("DEBUG: %d\n", ctx.use);
+
+	Term* stack[MAX_TYPES];
+	for(ssize_t i = 0; i < (ssize_t)left_depth_first(stack, MAX_TYPES, &factorial); ++i)
+		print_term(stack[i]);
+
+	printf("Starting left depth first recursion\n");
 	return 0;
 }
