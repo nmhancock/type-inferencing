@@ -6,7 +6,7 @@
 #include "inference.h"
 #include <stdio.h> /* debug */
 
-#define MAX_VARS 20 /* Max vars in same context, used in fresh & freshrec */
+#define MAX_VARS 40 /* Max vars in same context, used in fresh & freshrec */
 #define MAX_DEPTH 20
 
 typedef struct TypeList {
@@ -369,10 +369,17 @@ left_depth_first(Term **terms, size_t tcap, Term *root)
 }
 
 static size_t
-typush(Type **stack, size_t tyuse, Type* v)
+cpush(char **stack, size_t suse, char *v)
 {
-	stack[tyuse++] = v;
-	return tyuse;
+	stack[suse++] = v;
+	return suse;
+}
+
+static size_t
+typush(Type **stack, size_t suse, Type* v)
+{
+	stack[suse++] = v;
+	return suse;
 }
 
 #include <stdio.h>
@@ -426,24 +433,27 @@ lookup(Env *env, char* name)
 	return cur ? cur->node : NULL;
 }
 
-#define MAX_TYPES 200
-error_t
-extern_analyze(Inferencer *ctx, Term *node, Env *env, TypeList *ngs)
+static
+error_t analyze_wip(Inferencer *ctx, Term **ordered, size_t ouse, Env *env)
 {
-	TypeMap map[MAX_DEP] = {{.next = NULL, .from = NULL, .to = NULL}};
 	Type *stack[MAX_DEP] = {NULL};
-	Term *ordered[MAX_TYPES] = {NULL};
-	size_t scap = MAX_DEP;
+	char *nstack[MAX_DEP] = {NULL};
+	size_t local_scope = 0;
 	size_t suse = 0;
-	size_t ocap = MAX_TYPES;
-	size_t ouse = left_depth_first(ordered, ocap, node);
+	size_t scap = MAX_DEP;
+	Env *cur = env;
+	while (cur != NULL) {
+		(void)typush(stack, suse, cur->node);
+		suse = cpush(nstack, suse, cur->name);
+		cur = cur->next;
+	}
+	local_scope = suse;
+	fprintf(stderr, "local scope: %zu\n", local_scope);
+	(void)scap;
 	if(ouse == (size_t)-1)
 		return OUT_OF_TYPES;
 	else if(ouse == (size_t)-2)
 		return MAX_RECURSION_EXCEEDED;
-	for(size_t i = 0; i < MAX_DEP - 1; ++i)
-		map[i].next = &map[i + 1];
-	map[MAX_DEP - 1].next = NULL;
 	for(size_t i = 0; i < ouse; ++i) {
 		Term *t = ordered[i];
 		if(ctx->error)
@@ -452,49 +462,57 @@ extern_analyze(Inferencer *ctx, Term *node, Env *env, TypeList *ngs)
 		switch(t->type) {
 		case IDENTIFIER: {
 			long l = strtol(t->name, NULL, 0);
-			Type *cur = lookup(env, t->name);
-			if(lookup(env, t->name)) {
-				suse = typush(stack, suse, cur);
-				fprintf(stderr, "pushing %s as %d %p\n", t->name, cur->type, cur);
+			Type *cur = NULL;
+			for(size_t j = 0; j < local_scope; ++j)
+				if(!strcmp(nstack[j], t->name))
+					cur = stack[j];
+			if(cur) {
+				(void)typush(stack, suse, cur);
+				suse = cpush(nstack, suse, t->name);
 			}
 			else if(l != 0 || (l == 0 && errno != EINVAL)) {
-				suse = typush(stack, suse, Integer(ctx));
-				fprintf(stderr, "pushing %s as int %p\n", t->name, Integer(ctx));
+				(void)typush(stack, suse, Integer(ctx));
+				suse = cpush(nstack, suse, t->name);
 			}
 			else {
 				Type *v = Var(ctx);
-				suse = typush(stack, suse, v);
-				fprintf(stderr, "pushing %s as var %p\n", t->name, v);
+				(void)typush(stack, suse, v);
+				suse = cpush(nstack, suse, t->name);
 			}
 			break;
 		}
 		case APPLY: {
 			Type *arg = prune(stack[suse-- - 1]);
 			Type *fn = stack[suse-- - 1];
-			fprintf(stderr, "arg type: %d %p\n", arg->type, arg);
-			fprintf(stderr, "fn type: %d %p\n", fn->type, fn);
 			Type *var = Var(ctx);
-			fprintf(stderr, "fn args: %d\n", fn->args);
 			error_t res = unify_i(Function(ctx, arg, var), fn);
-			if(res) {
-				fprintf(stderr, "Error: %d\n", res);
-				fprintf(stderr, "test: %p %p\n", prune(arg), prune(fn));
+			if(res)
 				return res;
-			}
 			suse = typush(stack, suse, var);
 			break;
 		}
-		case LAMBDA:
-			fprintf(stderr, "suse: %zu\n", suse);
-			for(size_t j = suse; j > 0; j--)
-				fprintf(stderr, "type: %d\n", stack[suse - 1]->type);
-			assert(0);	
+		case LAMBDA: /* Create a named variable for the fn's type */
+			assert(suse - local_scope == 1);	
+			local_scope = cpush(nstack, local_scope, t->v);
 			break;
-		case LET:
-			break;
+		case LET: /* Create a named variable for the fn's type */
 		case LETREC:
+			assert(suse - local_scope == 1);	
+			local_scope = cpush(nstack, local_scope, t->v);
 			break;
 		}
 	}
+	ctx->result = stack[suse - 1];
 	return OK;
+}
+
+#define MAX_TYPES 200
+error_t
+extern_analyze(Inferencer *ctx, Term *node, Env *env, TypeList *ngs)
+{
+	Term *ordered[MAX_TYPES] = {NULL};
+	size_t ocap = MAX_TYPES;
+	size_t ouse = left_depth_first(ordered, ocap, node);
+	(void)ngs;
+	return analyze_wip(ctx, ordered, ouse, env);
 }

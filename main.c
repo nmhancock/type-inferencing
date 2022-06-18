@@ -156,7 +156,7 @@ main(void)
 		}
 	};
 	Type *t = NULL;
-	printf("ctx.use: %d\n", ctx.use);
+	printf("ctx.use before stuff: %d\n", ctx.use);
 	clock_t total = 0;
 #define ITERATIONS 1
 	for(int i = 0; i < ITERATIONS; ++i) {
@@ -177,11 +177,5 @@ main(void)
 		(double)(total / CLOCKS_PER_SEC * 1000000));
 	print(&factorial, t);
 	printf("DEBUG: %d\n", ctx.use);
-
-	Term* stack[MAX_TYPES];
-	for(ssize_t i = 0; i < (ssize_t)left_depth_first(stack, MAX_TYPES, &factorial); ++i)
-		print_term(stack[i]);
-
-	printf("Starting left depth first recursion\n");
 	return 0;
 }
