@@ -2,308 +2,16 @@
 #include <stdlib.h>	/* strtol */
 #include <string.h>	/* strcmp */
 #include <stddef.h>	/* offsetof */
+#include <stdbool.h>	/* true, false */
 
 #include "inference.h"
-#include <stdio.h> /* debug */
 
-#define MAX_VARS 40 /* Max vars in same context, used in fresh & freshrec */
-#define MAX_DEPTH 20
+#define MAX_DEPTH 30
 
 typedef struct TypeList {
 	Type *val;
 	struct TypeList *next;
 } TypeList;
-typedef struct TypeMap {
-	Type *from;
-	Type *to;
-	struct TypeMap *next;
-} TypeMap;
-static Type *
-find_or_add(Inferencer *ctx, TypeMap *map, Type *p)
-{
-	TypeMap *cur = map;
-	while(cur != NULL && cur->from != NULL) {
-		if(cur->from == p) {
-			return cur->to;
-		}
-		cur = cur->next;
-	}
-	if(cur == NULL)
-		return Err(ctx, LOCAL_SCOPE_EXCEEDED, NULL);
-	cur->from = p;
-	cur->to = Var(ctx);
-	return cur->to;
-}
-
-static Type *
-prune(Type *t)
-{
-	while(t && t->type == VARIABLE && t->instance)
-		t = t->instance;
-	return t;
-}
-#include <assert.h> /* Debugging */
-static int
-occurs_in_type(Type *v, Type *type2)
-{
-	size_t cmp_use = 0;
-	size_t cmp_cap = MAX_VARS;
-	struct Type *cmp_types[MAX_VARS] = {0};
-	size_t parent_use = 0;
-	size_t parent_cap = MAX_VARS;
-	struct Type *parent_types[MAX_VARS] = {0};
-	Type *pruned_type2 = prune(type2);
-	if(pruned_type2->type == OPERATOR) {
-		parent_types[parent_use++] = pruned_type2;
-		assert(parent_use < parent_cap);
-	} else {
-		cmp_types[cmp_use++] = pruned_type2;
-		assert(cmp_use < cmp_cap);
-	}
-	while(parent_use > 0) {
-		Type *cur = prune(parent_types[parent_use-- - 1]);
-		for(int i = 0; i < cur->args; ++i) {
-			if(cur->types[i]->type == OPERATOR) {
-				parent_types[parent_use++] = cur->types[i];
-				assert(parent_use < parent_cap);
-			} else {
-				cmp_types[cmp_use++] = cur->types[i];
-				assert(cmp_use < cmp_cap);
-			}
-		}
-		cmp_types[cmp_use++] = cur;
-		assert(cmp_use < cmp_cap);
-	}
-	while(cmp_use > 0)
-		if(prune(cmp_types[cmp_use-- - 1]) == v)
-			return 1;
-	return 0;
-}
-static int
-is_generic(Type *v, TypeList *ngs)
-{
-	/* Flip the return value because we're checking ngss for a generic */
-	while(ngs != NULL) {
-		if(occurs_in_type(v, ngs->val))
-			return 0;
-		ngs = ngs->next;
-	}
-	return 1;
-}
-
-static Type *
-freshrec(Inferencer *ctx, Type *tp, TypeList *ngs, TypeMap *map)
-{
-	Type *p = prune(tp);
-	if(ctx->error)
-		return NULL;
-	switch(p->type) {
-	case VARIABLE: {
-		if(is_generic(p, ngs))
-			return find_or_add(ctx, map, p);
-		else
-			return p;
-	}
-	case OPERATOR: {
-		Type *ret = make_type(ctx);
-		*ret = (Type){.type = OPERATOR,
-			      .name = p->name,
-			      .args = p->args};
-		for(int i = 0; i < ret->args; ++i)
-			ret->types[i] = freshrec(ctx, p->types[i], ngs, map);
-		return ret;
-	}
-	}
-}
-static Type *
-fresh(Inferencer *ctx, Type *t, TypeList *ngs)
-{
-	TypeMap map[MAX_VARS];
-	if(ctx->error)
-		return NULL;
-	for(int i = 0; i < MAX_VARS - 1; ++i) {
-		map[i].next = &map[i + 1];
-	}
-	map[MAX_VARS - 1].next = NULL;
-	for(int i = 0; i < MAX_VARS; ++i) {
-		map[i].from = map[i].to = NULL;
-	}
-	return freshrec(ctx, t, ngs, map);
-}
-
-#define MAX_DEP MAX_DEPTH
-static Type *
-fresh_i(Inferencer *ctx, Type *t, TypeList *ngs)
-{
-	TypeMap map[MAX_DEP] = {{.next = NULL, .from = NULL, .to = NULL}};
-	size_t cmp_use = 0;
-	size_t cmp_cap = MAX_DEP;
-	struct Type *cmp_types[MAX_DEP] = {0};
-	struct Type **cmp_parents[MAX_DEP] = {0};
-	size_t parent_use = 0;
-	size_t parent_cap = MAX_DEP;
-	struct Type *parent_types[MAX_DEP] = {0};
-	size_t parent_args[MAX_DEP] = {0};
-	size_t parent_cmp[MAX_DEP] = {0};
-	if(ctx->error)
-		return NULL;
-	for(int i = 0; i < MAX_DEP - 1; ++i)
-		map[i].next = &map[i + 1];
-	Type *p = prune(t);
-	if(p->type == OPERATOR) {
-		parent_types[parent_use] = p;
-		parent_cmp[parent_use++] = cmp_use;
-		assert(parent_use < parent_cap);
-	}
-	cmp_types[cmp_use] = p;
-	cmp_parents[cmp_use++] = NULL;
-	while(parent_use > 0) {
-		Type *cur = prune(parent_types[parent_use - 1]);
-		size_t args = parent_args[parent_use - 1];
-		parent_args[parent_use - 1] += 1;
-		if(args == cur->args) { /* Stop processing this node */
-			parent_use--;
-			continue;
-		}
-		/* Look at child */
-		if(cur->types[args]->type == OPERATOR) {
-			parent_types[parent_use] = cur->types[args];
-			parent_args[parent_use] = 0;
-			parent_cmp[parent_use++] = cmp_use;
-			assert(parent_use < parent_cap);
-		}
-		cmp_types[cmp_use] = cur->types[args];
-		cmp_parents[cmp_use++] = &cur->types[args];
-		assert(cmp_use < cmp_cap);
-	}
-	for(int i = 0; i < cmp_use; ++i) {
-		Type *cur = prune(cmp_types[i]);
-		Type **parent = cmp_parents[i];
-		switch(cur->type) {
-		case VARIABLE: {
-			Type *p = cur;
-			if(is_generic(p, ngs))
-				p = find_or_add(ctx, map, p);
-			break;
-		}
-		case OPERATOR: {
-			Type *p = make_type(ctx);
-			*p = (Type){.type = OPERATOR,
-				    .name = cur->name,
-				    .args = 0};
-			break;
-		}
-		}
-		if(parent)
-			*parent = p;
-	}
-	return NULL;
-}
-
-static Type *
-get_type(Inferencer *ctx, char *name, Env *env, TypeList *ngs)
-{
-	Env *cur = env;
-	long l = strtol(name, NULL, 0);
-	if(ctx->error)
-		return NULL;
-	if(l != 0 || (l == 0 && errno != EINVAL)) {
-		return Integer(ctx);
-	}
-	while(cur != NULL) {
-		if(!strcmp(name, cur->name))
-			return fresh(ctx, cur->node, ngs);
-		cur = cur->next;
-	}
-	return Err(ctx, UNDEFINED_SYMBOL, name);
-}
-static void
-unify(Inferencer *ctx, Type *t1, Type *t2)
-{
-	Type *a = prune(t1);
-	Type *b = prune(t2);
-	if(ctx->error) /* Neither a nor b are NULL subsequently */
-		return;
-	if(a->type == OPERATOR && b->type == VARIABLE) { /* Normalize */
-		Type *swp = a;
-		a = b;
-		b = swp;
-	}
-	switch(a->type) {
-	case VARIABLE:
-		if(a == b)
-			return;
-		else if(!occurs_in_type(a, b))
-			a->instance = b;
-		else
-			Err(ctx, RECURSIVE_UNIFICATION, NULL);
-		break;
-	case OPERATOR:
-		if(strcmp(a->name, b->name) || a->args != b->args)
-			Err(ctx, TYPE_MISMATCH, NULL);
-		else
-			for(int i = 0; i < a->args; ++i)
-				unify(ctx, a->types[i], b->types[i]);
-		break;
-	}
-	return;
-}
-
-static Type *
-analyze(Inferencer *ctx, Term *node, Env *env, TypeList *ngs)
-{
-	if(ctx->error)
-		return NULL;
-	switch(node->type) {
-	case IDENTIFIER:
-		return get_type(ctx, node->name, env, ngs);
-	case APPLY: {
-		Type *func = analyze(ctx, node->fn, env, ngs);
-		Type *arg = analyze(ctx, node->arg, env, ngs);
-		Type *res = Var(ctx);
-		unify(ctx, Function(ctx, arg, res), func);
-		return res;
-	}
-	case LAMBDA: {
-		Type *arg = Var(ctx);
-		Env new_env = {.name = node->v,
-			       .node = arg,
-			       .next = env};
-		TypeList new_ngs = {.val = arg, .next = ngs};
-		Type *res = analyze(ctx, node->body, &new_env, &new_ngs);
-		return Function(ctx, arg, res);
-	}
-	case LET: {
-		Type *defn = analyze(ctx, node->defn, env, ngs);
-		Env new_env = {.name = node->v,
-			       .node = defn,
-			       .next = env};
-		return analyze(ctx, node->body, &new_env, ngs);
-	}
-	case LETREC: {
-		Type *new = Var(ctx);
-		Env new_env = {.name = node->v,
-			       .node = new,
-			       .next = env};
-		TypeList new_ng = {.val = new, .next = ngs};
-		Type *defn = analyze(ctx, node->defn, &new_env, &new_ng);
-		unify(ctx, new, defn);
-		return analyze(ctx, node->body, &new_env, ngs);
-	}
-	default:
-		return Err(ctx, UNHANDLED_SYNTAX_NODE, NULL);
-	}
-}
-
-error_t
-extern_analyze2(Inferencer *ctx, Term *node, Env *env, TypeList *ngs)
-{
-	ctx->result = analyze(ctx, node, env, ngs);
-	if(ctx->error)
-		return ctx->error;
-	else
-		return OK;
-}
 
 size_t
 tpush(Term **list, size_t tuse, size_t tcap, Term *t)
@@ -369,136 +77,190 @@ left_depth_first(Term **terms, size_t tcap, Term *root)
 }
 
 static size_t
-cpush(char **stack, size_t suse, char *v)
-{
-	stack[suse++] = v;
-	return suse;
-}
-
-static size_t
 typush(Type **stack, size_t suse, Type* v)
 {
 	stack[suse++] = v;
 	return suse;
 }
 
-#include <stdio.h>
-static error_t
-unify_i(Type *t1, Type *t2)
+static size_t
+cpush(char **stack, size_t suse, char *v)
 {
-	typedef struct {
-		Type *a;
-		Type *b;
-	} Pair;
-	Pair stack[MAX_DEPTH] = {{ NULL, NULL }};
+	stack[suse++] = v;
+	return suse;
+}
+
+static
+size_t push_env(Type **stack, char **nstack, size_t scap, Env *env)
+{
 	size_t suse = 0;
-	size_t scap = MAX_DEPTH;
-	error_t res = OK;
-	stack[suse++] = (Pair) {.a = t1, .b = t2};
-	while(suse > 0) {
-		Type *a = prune(stack[suse - 1].a);
-		Type *b = prune(stack[suse-- - 1].b);
-		if(a->type == OPERATOR && b->type == VARIABLE) { /* Normalize */
-			Type *swp = a;
-			a = b;
-			b = swp;
-		}
-		switch(a->type) {
-		case VARIABLE:
-			if(a != b && occurs_in_type(a, b))
-				return RECURSIVE_UNIFICATION;
-			else
-				a->instance = b;
-			break;
-		case OPERATOR:
-			if(a == b)
-				break;
-			else if(strcmp(a->name, b->name) || a->args != b->args)
-				return TYPE_MISMATCH;
-			else
-				for(int i = 0; i < a->args; ++i)
-					stack[suse++] = (Pair){a->types[i], b->types[i]};
-			break;
-		}
+	for(Env *cur = env; cur != NULL && suse < scap; cur = cur->next) {
+		(void)typush(stack, suse, cur->node);
+		suse = cpush(nstack, suse, cur->name);
 	}
-	return OK;
+	return suse;
 }
 
 static Type*
-lookup(Env *env, char* name)
+lookup(Type **types, char **names, size_t cap, char *name)
 {
-	Env *cur = env;
-	while(cur != NULL && strcmp(name, cur->name))
-		cur = cur->next;
-	return cur ? cur->node : NULL;
+	for(size_t i = 0; i < cap; ++i)
+		if(!strcmp(name, names[i]))
+			return types[i];
+	return NULL;
 }
 
 static
 error_t analyze_wip(Inferencer *ctx, Term **ordered, size_t ouse, Env *env)
 {
-	Type *stack[MAX_DEP] = {NULL};
-	char *nstack[MAX_DEP] = {NULL};
-	size_t local_scope = 0;
-	size_t suse = 0;
-	size_t scap = MAX_DEP;
-	Env *cur = env;
-	while (cur != NULL) {
-		(void)typush(stack, suse, cur->node);
-		suse = cpush(nstack, suse, cur->name);
-		cur = cur->next;
-	}
-	local_scope = suse;
-	fprintf(stderr, "local scope: %zu\n", local_scope);
-	(void)scap;
+	Type *stack[MAX_DEPTH] = {NULL};
+	char *nstack[MAX_DEPTH] = {NULL};
+	size_t locals = 0;
+	size_t scap = MAX_DEPTH;
+	size_t suse = push_env(stack, nstack, scap, env);
+	locals = suse;
 	if(ouse == (size_t)-1)
 		return OUT_OF_TYPES;
 	else if(ouse == (size_t)-2)
 		return MAX_RECURSION_EXCEEDED;
+	Type *apply = Function(ctx, NULL, NULL);
+	apply->args = 0;
+	apply->name = "_apply";
 	for(size_t i = 0; i < ouse; ++i) {
 		Term *t = ordered[i];
 		if(ctx->error)
 			return ctx->error;
-		fprintf(stderr, "i: %zu t->type: %d\n", i, t->type);
 		switch(t->type) {
 		case IDENTIFIER: {
+			/* Lookup name in local scope _only_ since we don't
+			 * know which, if any, global variables are shadowed
+			*/
+			Type *v = lookup(&stack[locals],
+					 &nstack[locals],
+					 suse - locals,
+					 t->name);
 			long l = strtol(t->name, NULL, 0);
-			Type *cur = NULL;
-			for(size_t j = 0; j < local_scope; ++j)
-				if(!strcmp(nstack[j], t->name))
-					cur = stack[j];
-			if(cur) {
-				(void)typush(stack, suse, cur);
-				suse = cpush(nstack, suse, t->name);
+			if(l != 0 || (l == 0 && errno != EINVAL))
+				v = Integer(ctx);
+			else if (!v) {
+				v = Var(ctx);
+				v->name = t->name;
 			}
-			else if(l != 0 || (l == 0 && errno != EINVAL)) {
-				(void)typush(stack, suse, Integer(ctx));
-				suse = cpush(nstack, suse, t->name);
-			}
-			else {
-				Type *v = Var(ctx);
-				(void)typush(stack, suse, v);
-				suse = cpush(nstack, suse, t->name);
-			}
+			(void)typush(stack, suse, v);
+			suse = cpush(nstack, suse, t->name);
 			break;
 		}
 		case APPLY: {
-			Type *arg = prune(stack[suse-- - 1]);
-			Type *fn = stack[suse-- - 1];
-			Type *var = Var(ctx);
-			error_t res = unify_i(Function(ctx, arg, var), fn);
-			if(res)
-				return res;
-			suse = typush(stack, suse, var);
+			(void)typush(stack, suse, apply);
+			suse = cpush(nstack, suse, "_apply");
 			break;
 		}
-		case LAMBDA: /* Create a named variable for the fn's type */
-			assert(suse - local_scope == 1);	
-			local_scope = cpush(nstack, local_scope, t->v);
+		case LAMBDA: {
+			Type *arg = NULL;
+			for(size_t i = locals; i < suse; ++i) { /* resolve */
+				Type *found = lookup(stack, nstack, locals, stack[i]->name);
+				if(found && strcmp(stack[i]->name, t->v))
+					stack[i] = found;
+			}
+			for(size_t i = locals; i < suse; ++i) {
+				if(!strcmp(stack[i]->name, t->v))
+					arg = stack[i];
+			}
+			for(size_t low = locals, high = suse - 1; low < high; low++, high--) { /* reverse */
+				Type *tmp = stack[low];
+				char *ctmp = nstack[low];
+				stack[low] = stack[high];
+				nstack[low] = nstack[high];
+				stack[high] = tmp;
+				nstack[high] = ctmp;
+			}
+			for(size_t i = locals, applies = 0, end = suse; i < end; i++) { /* simplify */
+				Type *cur = stack[i];
+				if(cur == apply) {
+					applies++;
+					continue;
+				}
+				if(cur->type == VARIABLE && cur->instance)
+					cur = cur->instance;
+				while(suse - end > 0 && applies > 0 && cur->type == OPERATOR && cur->args > 0) {
+					Type *prev = stack[suse-- - 1];
+					Type *left = cur->types[0];
+					Type *right = cur->types[1];
+					if(prev->type == VARIABLE && prev->instance == NULL) {
+						if(prev->instance == NULL)
+							prev->instance = left;
+						prev = prev->instance;
+					}
+					while(left->type == VARIABLE && left->instance)
+						left = left->instance;
+					while(right->type == VARIABLE && right->instance)
+						right = right->instance;
+					if(left->type == VARIABLE) {
+						left->instance = prev;
+						left = left->instance;
+					}
+					if(prev != left)
+						Err(ctx, TYPE_MISMATCH, "");
+					else
+						cur = right;
+					applies--;
+				}
+				suse = typush(stack, suse, cur);
+			}
+			stack[locals] = Function(ctx, arg, stack[suse-- - 1]);
+			locals = cpush(nstack, locals, NULL); // Don't know name yet
+			suse = locals;
 			break;
-		case LET: /* Create a named variable for the fn's type */
+		}
+		case LET:
 		case LETREC:
-			assert(suse - local_scope == 1);	
-			local_scope = cpush(nstack, local_scope, t->v);
+			nstack[locals - 1] = t->v; /* name variable from let */
+			for(size_t i = locals; i < suse; ++i) { /* resolve */
+				Type *found = lookup(stack, nstack, locals, stack[i]->name);
+				if(found)
+					stack[i] = found;
+			}
+			for(size_t low = locals, high = suse - 1; low < high; low++, high--) { /* swap */
+				Type *tmp = stack[low];
+				char *ctmp = nstack[low];
+				stack[low] = stack[high];
+				nstack[low] = nstack[high];
+				stack[high] = tmp;
+				nstack[high] = ctmp;
+			}
+			for(size_t i = locals, applies = 0, end = suse; i < end; i++) { /* simplify */
+				Type *cur = stack[i];
+				if(cur == apply) {
+					applies++;
+					continue;
+				}
+				if(cur->type == VARIABLE && cur->instance)
+					cur = cur->instance;
+				while(suse - end > 0 && applies > 0 && cur->type == OPERATOR && cur->args > 0) {
+					Type *prev = stack[suse-- - 1];
+					Type *left = cur->types[0];
+					Type *right = cur->types[1];
+					if(prev->type == VARIABLE && prev->instance == NULL) {
+						if(prev->instance == NULL)
+							prev->instance = left;
+						prev = prev->instance;
+					}
+					while(left->type == VARIABLE && left->instance)
+						left = left->instance;
+					while(right->type == VARIABLE && right->instance)
+						right = right->instance;
+					if(left->type == VARIABLE) {
+						left->instance = prev;
+						left = left->instance;
+					}
+					if(prev != left)
+						Err(ctx, TYPE_MISMATCH, "");
+					else
+						cur = right;
+					applies--;
+				}
+				suse = typush(stack, suse, cur);
+			}
 			break;
 		}
 	}

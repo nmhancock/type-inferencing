@@ -158,7 +158,7 @@ main(void)
 	Type *t = NULL;
 	printf("ctx.use before stuff: %d\n", ctx.use);
 	clock_t total = 0;
-#define ITERATIONS 1
+#define ITERATIONS 1000000
 	for(int i = 0; i < ITERATIONS; ++i) {
 		ctx.use = 16; /* Experimentally determined */
 		clock_t tic = clock();
