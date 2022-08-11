@@ -9,7 +9,7 @@ typedef enum {
 	UNIFY_ERROR = -5,
 	LOCAL_SCOPE_EXCEEDED = -6,
 	OUT_OF_TYPES = -7,
-        MAX_RECURSION_EXCEEDED = -8,
+	MAX_RECURSION_EXCEEDED = -8,
 } error_t;
 typedef enum {
 	VARIABLE = 0,
@@ -52,7 +52,6 @@ typedef struct Term {
 	term_t type;
 } Term;
 
-typedef struct TypeList TypeList;
 typedef struct Env {
 	char *name;
 	Type *node;
@@ -65,8 +64,9 @@ typedef struct Inferencer {
 	error_t error;
 	int use;
 	int cap;
+	int locals;
 } Inferencer;
-error_t extern_analyze(Inferencer *ctx, Term *node, Env *env, TypeList *ngs);
+error_t analyze(Inferencer *ctx, Term *node, Env *env);
 Type *get_result(Inferencer *ctx);
 
 Inferencer make_ctx(Type *, int); /* TODO: Fix return type to be int */
@@ -76,7 +76,7 @@ Type *Var(Inferencer *);
 Type *Err(Inferencer *, type_t, char *);
 Type *Integer(Inferencer *);
 Type *Bool(Inferencer *);
+Type *Apply(Inferencer *);
 
 void print(Term *, Type *);
 void print_error(Term *, error_t, char *);
-size_t left_depth_first(Term **terms, size_t tcap, Term *root);

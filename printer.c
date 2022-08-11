@@ -71,9 +71,9 @@ print_an_error(error_t e, char *symbol)
 	case LOCAL_SCOPE_EXCEEDED:
 		asprintf(&ret, "Too many variables in local scope");
 		break;
-        case MAX_RECURSION_EXCEEDED:
-                asprintf(&ret, "Recursion too deep");
-                break;
+	case MAX_RECURSION_EXCEEDED:
+		asprintf(&ret, "Recursion too deep");
+		break;
 	}
 	return ret;
 }

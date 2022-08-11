@@ -3,6 +3,7 @@
 #include "inference.h"
 
 static char *function_name = "->";
+static char *apply_name = "_apply";
 
 Type *
 make_type(Inferencer *ctx)
@@ -41,6 +42,13 @@ Bool(Inferencer *ctx)
 	return &ctx->types[1];
 }
 Type *
+Apply(Inferencer *ctx)
+{
+	if(ctx->error)
+		return NULL;
+	return &ctx->types[2];
+}
+Type *
 Var(Inferencer *ctx)
 {
 	Type *var = make_type(ctx);
@@ -66,15 +74,15 @@ Function(Inferencer *ctx, Type *arg_t, Type *res_t)
 		};
 	return function;
 }
-
 Inferencer
 make_ctx(Type *types, int max_types)
 {
 	Inferencer ctx = {.types = types,
 			  .use = 0,
+			  .locals = 0,
 			  .cap = max_types,
 			  .error = OK};
-	if(max_types < 2) {
+	if(max_types < 3) {
 		ctx.error = OUT_OF_TYPES;
 		return ctx;
 	}
@@ -85,6 +93,10 @@ make_ctx(Type *types, int max_types)
 				      .args = 0};
 	ctx.types[ctx.use++] = (Type){.type = OPERATOR,
 				      .name = "bool",
+				      .types = {NULL},
+				      .args = 0};
+	ctx.types[ctx.use++] = (Type){.type = OPERATOR,
+				      .name = apply_name,
 				      .types = {NULL},
 				      .args = 0};
 	return ctx;

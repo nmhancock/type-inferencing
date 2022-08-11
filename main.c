@@ -90,79 +90,20 @@ main(void)
 						.type = APPLY,
 						.fn = &(Term){
 							.type = IDENTIFIER,
-							.name = "cond"
-						},
-						.arg = &(Term){
-							.type = APPLY,
-							.fn = &(Term){
-								.type = IDENTIFIER,
-								.name = "zero"
-							},
-							.arg = &(Term){
-								.type = IDENTIFIER,
-								.name = "n"
-							}
-						}
-					},
-					.arg = &(Term){
-						.type = IDENTIFIER,
-						.name = "1"
-					}
-				},
-				.arg = &(Term){
-					.type = APPLY,
-					.fn = &(Term){
-						.type = APPLY,
-						.fn = &(Term){
-							.type = IDENTIFIER,
-							.name = "times"
-						},
-						.arg = &(Term){
-							.type = IDENTIFIER,
-							.name = "n"
-						}
-					},
-					.arg = &(Term){
-						.type = APPLY,
-						.fn = &(Term){
-							.type = IDENTIFIER,
-							.name = "factorial"
-						},
-						.arg = &(Term){
-							.type = APPLY,
-							.fn = &(Term){
-								.type = IDENTIFIER,
-								.name = "pred"
-							},
-							.arg = &(Term){
-								.type = IDENTIFIER,
-								.name = "n"
-							}
-						}
-					}
-				}
-			}
-		},
-		.body = &(Term){
-			.type = APPLY,
-			.fn = &(Term){
-				.type = IDENTIFIER,
-				.name = "factorial"
-			},
-			.arg = &(Term){
-				.type = IDENTIFIER,
-				.name = "5"
-			}
-		}
-	};
+							.name = "cond"},
+						.arg = &(Term){.type = APPLY, .fn = &(Term){.type = IDENTIFIER, .name = "zero"}, .arg = &(Term){.type = IDENTIFIER, .name = "n"}}},
+					.arg = &(Term){.type = IDENTIFIER, .name = "1"}},
+				.arg = &(Term){.type = APPLY, .fn = &(Term){.type = APPLY, .fn = &(Term){.type = IDENTIFIER, .name = "times"}, .arg = &(Term){.type = IDENTIFIER, .name = "n"}}, .arg = &(Term){.type = APPLY, .fn = &(Term){.type = IDENTIFIER, .name = "factorial"}, .arg = &(Term){.type = APPLY, .fn = &(Term){.type = IDENTIFIER, .name = "pred"}, .arg = &(Term){.type = IDENTIFIER, .name = "n"}}}}}},
+		.body = &(Term){.type = APPLY, .fn = &(Term){.type = IDENTIFIER, .name = "factorial"}, .arg = &(Term){.type = IDENTIFIER, .name = "5"}}};
 	Type *t = NULL;
-	printf("ctx.use before stuff: %d\n", ctx.use);
+	printf("ctx.use before stuff: %d locals: %d\n", ctx.use, ctx.locals);
 	clock_t total = 0;
 #define ITERATIONS 1000000
 	for(int i = 0; i < ITERATIONS; ++i) {
-		ctx.use = 16; /* Experimentally determined */
+		ctx.use = 17; /* Experimentally determined */
+		ctx.locals = 0;
 		clock_t tic = clock();
-		(void)extern_analyze(&ctx, &factorial, my_env, NULL);
+		(void)analyze(&ctx, &factorial, my_env);
 		clock_t toc = clock();
 		total += toc - tic;
 		if(ctx.error)
