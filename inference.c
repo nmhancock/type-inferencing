@@ -8,17 +8,8 @@
 
 #define MAX_DEPTH 40
 
-/* Gets the child pointer */
-static Term *
-get_child(Term *t, ssize_t offset)
-{
-	if(offset == -1)
-		return NULL;
-	return *(Term **)((uintptr_t)t + offset);
-}
-
 typedef struct TStack {
-	Type* stack[MAX_DEPTH];
+	Type *stack[MAX_DEPTH];
 	size_t use;
 	size_t cap;
 } TStack;
@@ -126,6 +117,15 @@ analyze_type(Inferencer *ctx, TStack *types, Term *t)
 		simplify(ctx, types, ctx->locals);
 		break;
 	}
+}
+
+/* Gets the child pointer */
+static Term *
+get_child(Term *t, ssize_t offset)
+{
+	if(offset == -1)
+		return NULL;
+	return *(Term **)((uintptr_t)t + offset);
 }
 
 error_t
