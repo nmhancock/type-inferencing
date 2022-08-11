@@ -19,7 +19,6 @@ get_child(Term *t, ssize_t offset)
 
 typedef struct TData {
 	Type *type;
-	char *name;
 } TData;
 typedef struct TStack {
 	TData stack[MAX_DEPTH];
@@ -31,7 +30,7 @@ static Type *
 lookup(TStack *types, size_t start, size_t end, char *name)
 {
 	for(size_t i = end - 1; i > start; --i)
-		if(types->stack[i - 1].name && !strcmp(name, types->stack[i - 1].name))
+		if(types->stack[i - 1].type->name && !strcmp(name, types->stack[i - 1].type->name))
 			return types->stack[i - 1].type;
 	return NULL;
 }
@@ -41,8 +40,8 @@ populate_definitions(Inferencer *ctx, TStack *types, size_t locals, char *except
 {
 	for(size_t i = locals; i < types->use; ++i) {
 		TData *cur = &types->stack[i];
-		Type *found = lookup(types, 0, locals, cur->name);
-		if(found && (!except || (except && strcmp(cur->name, except))))
+		Type *found = lookup(types, 0, locals, cur->type->name);
+		if(found && (!except || (except && strcmp(cur->type->name, except))))
 			cur->type = copy_generic(ctx, found);
 	}
 }
@@ -83,7 +82,7 @@ simplify(Inferencer *ctx, TStack *types, size_t locals)
 				Err(ctx, TYPE_MISMATCH, "");
 			applies--;
 		}
-		types->stack[types->use++] = (TData){cur, types->stack[i].name};
+		types->stack[types->use++] = (TData){cur};
 	}
 	return;
 }
@@ -104,26 +103,27 @@ analyze_type(Inferencer *ctx, TStack *types, Term *t)
 			v = Var(ctx);
 			v->name = t->name;
 		}
-		types->stack[types->use++] = (TData){v, t->name};
+		types->stack[types->use++] = (TData){v};
 		break;
 	}
 	case APPLY:
-		types->stack[types->use++] = (TData){Apply(ctx), "_apply"};
+		types->stack[types->use] = (TData){Apply(ctx)};
+		types->stack[types->use++].type->name = "_apply";
 		break;
 	case LAMBDA: {
 		Type *arg = lookup(types, ctx->locals, types->use, t->v);
 		populate_definitions(ctx, types, ctx->locals, t->v); /* resolve */
 		reverse(types, ctx->locals, types->use);
 		simplify(ctx, types, ctx->locals);
-		types->stack[ctx->locals++] = (TData){
-			Function(ctx, arg, types->stack[types->use-- - 1].type),
-			""};
+		types->stack[ctx->locals] = (TData){
+			Function(ctx, arg, types->stack[types->use-- - 1].type)};
+		types->stack[ctx->locals++].type->name = "";
 		types->use = ctx->locals;
 		break;
 	}
 	case LET:
 	case LETREC:
-		types->stack[ctx->locals - 1].name = t->v; /* name let var */
+		types->stack[ctx->locals - 1].type->name = t->v; /* name let var */
 		populate_definitions(ctx, types, ctx->locals, NULL);
 		reverse(types, ctx->locals, types->use);
 		simplify(ctx, types, ctx->locals);
@@ -144,7 +144,7 @@ analyze(Inferencer *ctx, Term *root, Env *env)
 		size_t cap;
 	} PStack;
 	PStack terms = {{{NULL}, {0}}, 0, MAX_DEPTH};
-	TStack types = {{{NULL, NULL}}, 0, MAX_DEPTH};
+	TStack types = {{{NULL}}, 0, MAX_DEPTH};
 	/* maps from type and seen to offset of child pointer */
 	ssize_t child_offsets[5][3] = {
 		[IDENTIFIER] = {-1},
@@ -154,7 +154,8 @@ analyze(Inferencer *ctx, Term *root, Env *env)
 		[LETREC] = {offsetof(Term, defn), offsetof(Term, body), -1},
 	};
 	while(env != NULL) {
-		types.stack[types.use++] = (TData){env->node, env->name};
+		types.stack[types.use] = (TData){env->node};
+		types.stack[types.use++].type->name = env->name;
 		env = env->next;
 	}
 	ctx->locals = types.use;
