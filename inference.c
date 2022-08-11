@@ -1,8 +1,8 @@
 #include <errno.h>
-#include <stdlib.h>  /* strtol */
-#include <string.h>  /* strcmp */
-#include <stddef.h>  /* offsetof */
-#include <stdbool.h> /* true, false */
+#include <stdlib.h> /* strtol */
+#include <string.h> /* strcmp */
+#include <stddef.h> /* offsetof, uint32_t */
+#include <stdint.h> /* uint32_t */
 
 #include "inference.h"
 
@@ -30,20 +30,20 @@ typedef struct TStack {
 static Type *
 lookup(TStack *types, size_t start, size_t end, char *name)
 {
-	for(size_t i = start; i < end; ++i)
-		if(types->stack[i].name && !strcmp(name, types->stack[i].name))
-			return types->stack[i].type;
+	for(size_t i = end - 1; i > start; --i)
+		if(types->stack[i - 1].name && !strcmp(name, types->stack[i - 1].name))
+			return types->stack[i - 1].type;
 	return NULL;
 }
 
 static void
-populate_definitions(TStack *types, size_t locals, char *except)
+populate_definitions(Inferencer *ctx, TStack *types, size_t locals, char *except)
 {
 	for(size_t i = locals; i < types->use; ++i) {
 		TData *cur = &types->stack[i];
 		Type *found = lookup(types, 0, locals, cur->name);
 		if(found && (!except || (except && strcmp(cur->name, except))))
-			cur->type = found;
+			cur->type = copy_generic(ctx, found);
 	}
 }
 
@@ -66,32 +66,24 @@ simplify(Inferencer *ctx, TStack *types, size_t locals)
 			applies++;
 			continue;
 		}
-		if(cur->type == VARIABLE && cur->instance)
-			cur = cur->instance;
 		while(types->use > end && applies > 0 && cur->type == OPERATOR && cur->args > 0) {
 			Type *prev = types->stack[types->use-- - 1].type;
 			Type *left = cur->types[0];
 			Type *right = cur->types[1];
-			if(prev->type == VARIABLE && prev->instance == NULL) {
-				if(prev->instance == NULL)
-					prev->instance = left;
-				prev = prev->instance;
+			if(prev->type == VARIABLE) {
+				var_is(ctx, prev, left);
+				prev = left;
 			}
-			while(left->type == VARIABLE && left->instance)
-				left = left->instance;
-			while(right->type == VARIABLE && right->instance)
-				right = right->instance;
 			if(left->type == VARIABLE) {
-				left->instance = prev;
-				left = left->instance;
+				var_is(ctx, left, prev);
 			}
-			if(prev != left)
-				Err(ctx, TYPE_MISMATCH, "");
-			else
+			if(prev == left || prev->id == left->id)
 				cur = right;
+			else
+				Err(ctx, TYPE_MISMATCH, "");
 			applies--;
 		}
-		types->stack[types->use++] = (TData){cur, ""};
+		types->stack[types->use++] = (TData){cur, types->stack[i].name};
 	}
 	return;
 }
@@ -120,7 +112,7 @@ analyze_type(Inferencer *ctx, TStack *types, Term *t)
 		break;
 	case LAMBDA: {
 		Type *arg = lookup(types, ctx->locals, types->use, t->v);
-		populate_definitions(types, ctx->locals, t->v); /* resolve */
+		populate_definitions(ctx, types, ctx->locals, t->v); /* resolve */
 		reverse(types, ctx->locals, types->use);
 		simplify(ctx, types, ctx->locals);
 		types->stack[ctx->locals++] = (TData){
@@ -132,7 +124,7 @@ analyze_type(Inferencer *ctx, TStack *types, Term *t)
 	case LET:
 	case LETREC:
 		types->stack[ctx->locals - 1].name = t->v; /* name let var */
-		populate_definitions(types, ctx->locals, NULL);
+		populate_definitions(ctx, types, ctx->locals, NULL);
 		reverse(types, ctx->locals, types->use);
 		simplify(ctx, types, ctx->locals);
 		break;

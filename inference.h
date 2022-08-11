@@ -1,3 +1,4 @@
+/* requires stdint.h */
 #define MAX_ARGS 2
 
 typedef enum {
@@ -16,16 +17,17 @@ typedef enum {
 	OPERATOR = 1,
 } type_t;
 typedef struct Type {
+	char *name;
 	union {
 		struct Type *instance;
 		struct {
 			struct Type *types[MAX_ARGS];
-			int args;
+			uint32_t args : 2;
 		};
 	};
-	char *name;
-	int id;
-	type_t type;
+	uint32_t generic : 1;
+	uint32_t type : 1;
+	uint32_t id : 28;
 } Type;
 typedef enum {
 	IDENTIFIER = 0,
@@ -77,6 +79,8 @@ Type *Err(Inferencer *, type_t, char *);
 Type *Integer(Inferencer *);
 Type *Bool(Inferencer *);
 Type *Apply(Inferencer *);
+Type *copy_generic(Inferencer *ctx, Type *v);
+void var_is(Inferencer *ctx, Type *v, Type *i);
 
 void print(Term *, Type *);
 void print_error(Term *, error_t, char *);

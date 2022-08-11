@@ -14,7 +14,7 @@ print_a_type(Type *t)
 	switch(t->type) {
 	case VARIABLE:
 		if(!t->instance) {
-			asprintf(&ret, "%s (%d)", t->name, t->id);
+			asprintf(&ret, "%s", t->name);
 			return ret;
 		}
 		char *instance = print_a_type(t->instance);
