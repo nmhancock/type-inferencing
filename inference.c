@@ -68,8 +68,7 @@ simplify(Inferencer *ctx, TStack *types, size_t locals)
 		}
 		if(cur->type == VARIABLE && cur->instance)
 			cur = cur->instance;
-		/* simplify condition below */
-		while(types->use - end > 0 && applies > 0 && cur->type == OPERATOR && cur->args > 0) {
+		while(types->use > end && applies > 0 && cur->type == OPERATOR && cur->args > 0) {
 			Type *prev = types->stack[types->use-- - 1].type;
 			Type *left = cur->types[0];
 			Type *right = cur->types[1];
@@ -123,7 +122,7 @@ analyze_type(Inferencer *ctx, TStack *types, Term *t)
 		Type *arg = lookup(types, ctx->locals, types->use, t->v);
 		populate_definitions(types, ctx->locals, t->v); /* resolve */
 		reverse(types, ctx->locals, types->use);
-		(void)simplify(ctx, types, ctx->locals);
+		simplify(ctx, types, ctx->locals);
 		types->stack[ctx->locals++] = (TData){
 			Function(ctx, arg, types->stack[types->use-- - 1].type),
 			""};

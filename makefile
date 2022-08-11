@@ -4,4 +4,4 @@ all: main.c inference.c printer.c context.c inference.h
 format:
 	clang-format -i *.c *.h
 cloc:
-	cloc --by-file ./src
+	cloc --by-file *.c *.h
